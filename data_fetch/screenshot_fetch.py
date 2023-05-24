@@ -1,4 +1,5 @@
 import argparse
+import os
 import time
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -48,12 +49,17 @@ class Browser:
     def iframe_switch(self, value: str):
         self.driver.switch_to.frame(value)
 
-    def screen_shot(self, name: str, ss_type: str):
+    def screen_shot(self, name: str, ss_type: str, lecture_name: str):
+        # Create the lecture folder if it does not exist
+        if not os.path.exists(f"screenshots/{lecture_name}"):
+            os.makedirs(f"screenshots/{lecture_name}")
+
+        # Take the screenshot
         if ss_type == "slideshow":
-            self.driver.save_screenshot(f"screenshots/{name}_{self.slideshow_count}.png")
+            self.driver.save_screenshot(f"screenshots/{lecture_name}/{name}_{self.slideshow_count}.png")
             self.slideshow_count += 1
         elif ss_type == "presenter":
-            self.driver.save_screenshot(f"screenshots/{name}_{self.presenter_count}.png")
+            self.driver.save_screenshot(f"screenshots/{lecture_name}/{name}_{self.presenter_count}.png")
             self.presenter_count += 1
 
     def next_timestamp(self, times):
@@ -81,10 +87,10 @@ class Browser:
 
 class Scraper:
 
-        def __init__(self):
+        def __init__(self, lecture_name: str):
             self.total_time = 0
             self.curr_time = 0
-            self.browser = Browser('/usr/bin/chromedriver')
+            self.lecture_name = lecture_name
 
         def scrape_lecture_recording(self, video_url: str):
             with open('./secrets.txt', 'r') as f:
@@ -93,7 +99,7 @@ class Scraper:
             browser = Browser('/usr/bin/chromedriver')
             browser.driver.maximize_window()
             browser.open_page(
-                'https://collegerama.tudelft.nl/Mediasite/Channel/eemcs-msc-cs/watch/770911dbcaad427990eceb9afe0e01db1d')
+                video_url)
             browser.sleep(1, 3)
 
             browser.login_collegerama(username=username, password=password)
@@ -125,7 +131,7 @@ class Scraper:
                 browser.click_button(By.XPATH, value='//*[@id="vjs_video_3"]/div[7]/div[10]/div[1]/div[2]')
                 browser.sleep(1, 3)
 
-                browser.screen_shot("slideshow", "slideshow")
+                browser.screen_shot("slideshow", "slideshow", self.lecture_name)
                 browser.sleep(1, 3)
 
                 browser.click_button(By.CLASS_NAME, value="mediasite-player__smart-zoom-exit-button")
@@ -134,7 +140,7 @@ class Scraper:
                 browser.click_button(By.XPATH, value='//*[@id="vjs_video_3"]/div[7]/div[10]/div[1]/div[3]')
                 browser.sleep(1, 3)
 
-                browser.screen_shot("presenter", "presenter")
+                browser.screen_shot("presenter", "presenter", self.lecture_name)
                 browser.sleep(1, 3)
 
                 browser.click_button(By.CLASS_NAME, value="mediasite-player__smart-zoom-exit-button")
@@ -147,10 +153,11 @@ class Scraper:
 
 if __name__ == '__main__':
     # Get the url of the recording from the command line
-    parser = argparse.ArgumentParser()
-    parser.add_argument("url", help="The url of the lecture recording")
+    with open('./urls.txt', 'r') as f:
+        urls = f.read().splitlines()
 
-    args = parser.parse_args()
+    for url in urls:
+        name = url.split("/")[-1]
 
-    scraper = Scraper()
-    scraper.scrape_lecture_recording(args.url)
+        scraper = Scraper(name)
+        scraper.scrape_lecture_recording(url)
