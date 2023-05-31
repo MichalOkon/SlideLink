@@ -2,254 +2,378 @@ import os
 import time
 import random
 from tqdm import tqdm
-from typing import Tuple
+from typing import Tuple, Union, Any, List
 from selenium.webdriver import Chrome
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as ec
 from selenium.common.exceptions import NoSuchElementException, StaleElementReferenceException, TimeoutException
 
 
-IGNORE_EXCEPTIONS=(NoSuchElementException,StaleElementReferenceException)
+IGNORE_EXCEPTIONS = (NoSuchElementException, StaleElementReferenceException)
+
 
 class Browser:
+    """Browser driver abstraction capabilities class."""
 
-    # Initialise the webdriver with the path to chromedriver.exe
-    def __init__(self, driver: str):
-        self.service = Service(driver)
-        self.driver = Chrome(service=self.service)
+    def __init__(self, driver_path: str):
+        """Initialise the webdriver with the path to the chromedriver.
+
+        Args:
+            driver_path (str): path to the chromedriver
+        """
+        self.driver = Chrome(service=Service(driver_path))
         self.driver.delete_all_cookies()
         self.slideshow_count = 0
         self.presenter_count = 0
         self.curr_timestamp = 0
-    
-    def _wait_until_click(self, by: By, value: str, timeout: float = 20.0):
-        return WebDriverWait(
-            self.driver,
-            timeout=timeout,
-            ignored_exceptions=IGNORE_EXCEPTIONS
-            ).until(
-                ec.element_to_be_clickable(
-                    (by, value)
-                )
-            )
-    
-    def _wait_until_present(self, by: By, value: str, timeout: float = 20.0):
-        return WebDriverWait(
-            self.driver,
-            timeout=timeout,
-            ignored_exceptions=IGNORE_EXCEPTIONS
-            ).until(
-                ec.presence_of_element_located(
-                    (by, value)
-                )
-            )
 
-    def _wait_until_selectable(self, by: By, value: str, timeout: float = 20.0):
-        return WebDriverWait(
-            self.driver,
-            timeout=timeout,
-            ignored_exceptions=IGNORE_EXCEPTIONS
-            ).until(
-                ec.element_to_be_selected(
-                    (by, value)
-                )
+    def _wait_until_click(self, by: str, value: str, timeout: float = 20.0) -> Union[Any, None]:
+        """Waits until a specified element can be clicked.
+
+        Args:
+            by (str): Identifier of the element type
+            value (str): value of the identifier
+            timeout (float, optional): A timeout value. Defaults to 20.0.
+
+        Returns:
+            Union[Any, None]: A Web Element or none if
+        """
+        try:
+            clickable_el = WebDriverWait(self.driver, timeout=timeout, ignored_exceptions=IGNORE_EXCEPTIONS).until(
+                ec.element_to_be_clickable((by, value))
             )
+        except TimeoutException:
+            clickable_el = None
+        return clickable_el
+
+    def _wait_until_present(self, by: str, value: str, timeout: float = 20.0) -> Union[Any, None]:
+        """Waits until a specified element is present (can be located).
+
+        Args:
+            by (str): Identifier of the element type
+            value (str): value of the identifier
+            timeout (float, optional): A timeout value. Defaults to 20.0.
+
+        Returns:
+            Union[Any, None]: A Web Element or none if
+        """
+        try:
+            present_el = WebDriverWait(self.driver, timeout=timeout, ignored_exceptions=IGNORE_EXCEPTIONS).until(
+                ec.presence_of_element_located((by, value))
+            )
+        except TimeoutException:
+            present_el = None
+        return present_el
+
+    def _wait_until_found(self, by: str, value: str, timeout: float = 20.0) -> Union[Any, None]:
+        """Waits until a specified element is found through active element finding.
+
+        Args:
+            by (str): Identifier of the element type
+            value (str): value of the identifier
+            timeout (float, optional): A timeout value. Defaults to 20.0.
+
+        Returns:
+            Union[Any, None]: A Web Element or none if
+        """
+        return WebDriverWait(self.driver, timeout=timeout, ignored_exceptions=IGNORE_EXCEPTIONS).until(
+            self.driver.find_element(by=by, value=value)
+        )
 
     def open_page(self, url: str) -> None:
+        """Open a new page with a given url.
+
+        Args:
+            url (str): resource to open.
+        """
         self.driver.get(url)
 
     def sleep(self, start_range: float, end_range: float) -> None:
+        """Wrapper method for the driver to sleep for some duration range in seconds.
+
+        Args:
+            start_range (float): start time range in seconds
+            end_range (float): end time range in seconds (exclusive)
+        """
         time.sleep(random.uniform(start_range, end_range))
 
     def close_browser(self) -> None:
+        """Closes the browser."""
         self.driver.close()
 
-    def add_input(self, by: By, value: str, text: str, wait: bool = True) -> None:
-        if wait :
+    def add_text_input(self, by: str, value: str, text: str, wait: bool = True) -> None:
+        """Adds a text input to a web element.
+
+        Args:
+            by (str): Identifier of the element type
+            value (str): value of the identifier
+            text (str): text to be inserted into the text input element
+            wait (bool, optional): defines if one should wait for element to be found. Defaults to True.
+        """
+        if wait:
             field = self._wait_until_present(by, value)
-        else :
+            if field is None:
+                return
+        else:
             field = self.driver.find_element(by=by, value=value)
         field.send_keys(text)
 
-    def click_button(self, by: By, value: str, wait: bool = True) -> None:
-        if wait :
+    def click_button(self, by: str, value: str, wait: bool = True) -> None:
+        """Clicks a button on the page.
+
+        Args:
+            by (str): Identifier of the element type
+            value (str): value of the identifier
+            wait (bool, optional): defines if one should wait until element can be clicked. Defaults to True.
+        """
+        if wait:
             button = self._wait_until_click(by, value)
-        else :
+            if button is None:
+                return
+        else:
             button = self.driver.find_element(by=by, value=value)
         button.click()
 
-    def click_execute(self, by: By, value: str, wait: bool = True) -> None:
-        if wait :
+    def click_execute(self, by: str, value: str, wait: bool = True) -> None:
+        """Performs a clicks script on the page.
+
+        Args:
+            by (str): Identifier of the element type
+            value (str): value of the identifier
+            wait (bool, optional): defines if one should wait for element to be found. Defaults to True.
+        """
+        if wait:
             button = self._wait_until_present(by, value)
-        else :
+            if button is None:
+                return
+        else:
             button = self.driver.find_element(by=by, value=value)
         self.driver.execute_script("arguments[0].click();", button)
 
-    def login_collegerama(self, username: str, password: str) -> None:
-        self.add_input(by=By.ID, value='username', text=username)
-        self.add_input(by=By.ID, value='password', text=password)
-        self.click_button(by=By.CLASS_NAME, value='login-button')
+    def login_action(self, username: str, password: str) -> None:
+        """Perform login action with username and password.
+
+        Args:
+            username (str): username
+            password (str): password
+        """
+        self.add_text_input(by=By.ID, value="username", text=username)
+        self.add_text_input(by=By.ID, value="password", text=password)
+        self.click_button(by=By.CLASS_NAME, value="login-button")
 
     def iframe_switch(self, value: str) -> None:
+        """Switch to a specific iframe.
+
+        Args:
+            value (str): iframe name to switch to.
+        """
         self.driver.switch_to.frame(value)
 
-    def screen_shot(self, ss_type: str, lecture_name: str) -> None:
+    def take_screen_shot(self, screen_type: str, lecture_name: str) -> None:
+        """Takes screen shots and saves them to directories.
+
+        Args:
+            screen_type (str): screen type to save screenshots from.
+            lecture_name (str): _description_
+        """
         # Create the lecture folder if it does not exist
         if not os.path.exists(f"screenshots/{lecture_name}"):
             os.makedirs(f"screenshots/{lecture_name}")
-        if not os.path.exists(f"screenshots/{lecture_name}/{ss_type}"):
-            os.makedirs(f"screenshots/{lecture_name}/{ss_type}")
+        if not os.path.exists(f"screenshots/{lecture_name}/{screen_type}"):
+            os.makedirs(f"screenshots/{lecture_name}/{screen_type}")
 
         # Take the screenshot
-        if ss_type == "slideshow":
+        count = 0
+        if screen_type == "slideshow":
             self.slideshow_count += 1
             count = self.slideshow_count
-        elif ss_type == "presenter":
+        elif screen_type == "presenter":
             self.presenter_count += 1
             count = self.presenter_count
-        self.driver.save_screenshot(f"screenshots/{lecture_name}/{ss_type}/{count:04}.png")
+        self.driver.save_screenshot(f"screenshots/{lecture_name}/{screen_type}/{count:04}.png")
 
-    def next_timestamp(self, times: int, wait: bool = True):
+    def move_next_timestamp(self, times: int, wait: bool = True) -> None:
+        """Moves the next timestamp of the video to through right arrow key.
+
+        Args:
+            times (int): number of presses
+            wait (bool, optional): defines if one should wait for element to be found. Defaults to True.
+        """
         for _ in range(times):
-            if wait :
+            if wait:
                 video = self._wait_until_present(By.ID, "vjs_video_3")
-            else :
+                if video is None:
+                    continue
+            else:
                 video = self.driver.find_element(By.ID, value="vjs_video_3")
             video.send_keys(Keys.ARROW_RIGHT)
         self.sleep(1, 3)
-    
+
     def get_video_times_m(self, wait: bool = True) -> Tuple[int, int]:
         """Start counting the time (in minutes)
 
         Returns:
-            tuple(int, int): start and end times tuple in minutes
+            Tuple[int, int]: start and end times tuple in minutes
         """
         self.sleep(1, 4)
-        if wait :
-            string_curr_time = self._wait_until_click(By.CSS_SELECTOR, value=".vjs-current-time-display").text
-            string_total_time = self._wait_until_click(By.CSS_SELECTOR, value=".vjs-duration-display").text
-        else :
+        if wait:
+            string_curr_time = self._wait_until_click(By.CSS_SELECTOR, value=".vjs-current-time-display")
+            if string_curr_time is None:
+                string_curr_time = self.driver.find_element(By.CSS_SELECTOR, value=".vjs-current-time-display")
+            string_curr_time = string_curr_time.text
+            string_total_time = self._wait_until_click(By.CSS_SELECTOR, value=".vjs-duration-display")
+            if string_total_time is None:
+                string_total_time = self.driver.find_element(By.CSS_SELECTOR, value=".vjs-current-time-display")
+            string_total_time = string_total_time.text
+
+        else:
             string_curr_time = self.driver.find_element(By.CSS_SELECTOR, value=".vjs-current-time-display").text
             string_total_time = self.driver.find_element(By.CSS_SELECTOR, value=".vjs-duration-display").text
-        
+
         times = [string_curr_time, string_total_time]
+        times_s = [0 for _ in range(2)]
 
         for i in range(len(times)):
-        # Turn time into seconds
+            # Turn time into seconds
             video_time_strs = times[i].split(":")
 
             # Turn strings into integers
-            if (len(video_time_strs) == 3):
-                times[i] = 60 * int(video_time_strs[0]) + int(video_time_strs[1])
+            if len(video_time_strs) == 3:
+                times_s[i] = 60 * int(video_time_strs[0]) + int(video_time_strs[1])
             else:
-                times[i] = int(video_time_strs[0])
+                times_s[i] = int(video_time_strs[0])
 
-        return tuple(times)
-    
-    def get_children(self, by: By, value: str, wait: bool = True):
-        if wait :
+        return tuple(times_s)
+
+    def get_children(self, by: str, value: str, wait: bool = True) -> Union[Any, None]:
+        """Get all children of an element.
+
+        Args:
+            by (str): Identifier of the element type
+            value (str): value of the identifier
+            wait (bool, optional): defines if one should wait for element to be found. Defaults to True.
+
+        Returns:
+            Union[Any, None]: web element list or None waiting fails
+        """
+        if wait:
             element = self._wait_until_present(by, value)
-        else :
+            if element is None:
+                return None
+        else:
             element = self.driver.find_element(by, value=value)
         return element.find_elements(By.TAG_NAME, "div")
 
+
 class Scraper:
+    """Scraper class"""
 
-        def __init__(self, link: str):
-            self.total_time = 0
-            self.curr_time = 0
-            self.link = link
-            self.lecture_name = link.split("/")[-1]
+    def __init__(self, link: str):
+        """Initialise scraper object.
 
-        def scrape_lecture_recording(self, video_url: str):
-            with open('./secrets.txt', 'r') as f:
-                username, password = f.read().splitlines()
+        Args:
+            link (str): _description_
+        """
+        self.total_time = 0
+        self.curr_time = 0
+        self.link = link
+        self.lecture_name = link.split("/")[-1]
 
-            browser = Browser('/usr/bin/chromedriver')
-            browser.driver.maximize_window()
-            browser.open_page(video_url)
-            browser.sleep(0.5, 1.5)
+    def scrape_lecture_recording(self, video_url: str):
+        """Scrapes screenshots of a video recording.
 
-            browser.login_collegerama(username=username, password=password)
-            browser.sleep(5, 7)
+        Args:
+            video_url (str): video URL to scrape
+        """
+        with open("./secrets.txt", "r") as f:
+            username, password = f.read().splitlines()
 
-            # Turn on the fullscreen
-            browser.click_button(By.CSS_SELECTOR, '.btn-bigger.link.channel-button')
-            browser.sleep(0.5, 1.5)
+        browser = Browser("/usr/bin/chromedriver")
+        browser.driver.maximize_window()
+        browser.open_page(video_url)
+        browser.sleep(0.5, 1.5)
 
-            browser.click_button(By.XPATH, '//*[@id="InAppPlayerContainer"]/div[2]/div[1]')
-            browser.sleep(0.5, 1.5)
+        browser.login_action(username=username, password=password)
+        browser.sleep(5, 7)
 
-            # Enter the media player
-            browser.iframe_switch("player-iframe")
-            browser.sleep(0.5, 1.5)
+        # Turn on the fullscreen
+        browser.click_button(By.CSS_SELECTOR, ".btn-bigger.link.channel-button")
+        browser.sleep(0.5, 1.5)
 
-            browser.click_execute(By.XPATH, '//*[@id="vjs_video_3"]/div[4]/button[1]')
-            browser.sleep(0.5, 1.5)
-            
-            children = browser.get_children(By.XPATH, '//*[@id="vjs_video_3"]/div[7]/div[10]/div[1]')
-            if len(children) == 2:
-                slide_show_path = '//*[@id="vjs_video_3"]/div[7]/div[10]/div[1]/div[1]'
-                presenter_path = '//*[@id="vjs_video_3"]/div[7]/div[10]/div[1]/div[2]'
-            else:
-                slide_show_path = '//*[@id="vjs_video_3"]/div[7]/div[10]/div[1]/div[2]'
-                presenter_path = '//*[@id="vjs_video_3"]/div[7]/div[10]/div[1]/div[3]'
-            browser.sleep(0.5, 1.5)
-            browser.click_execute(By.XPATH, '//*[@id="vjs_video_3"]/div[4]/button[1]', wait=False)
-            browser.sleep(3.5, 4)
+        browser.click_button(By.XPATH, '//*[@id="InAppPlayerContainer"]/div[2]/div[1]')
+        browser.sleep(0.5, 1.5)
 
-            # Get total time of the video (in minutes)
-            curr_time, total_time  = browser.get_video_times_m(wait=False)
-            self.total_time = total_time
+        # Enter the media player
+        browser.iframe_switch("player-iframe")
+        browser.sleep(0.5, 1.5)
 
-            browser.sleep(0.5, 1.5)
+        browser.click_execute(By.XPATH, '//*[@id="vjs_video_3"]/div[4]/button[1]')
+        browser.sleep(0.5, 1.5)
 
-            self.curr_time = curr_time
-            
-            print(f"Scraping video: {self.link}")
-            
-            progress_bar = tqdm(desc="Progress: ", total=self.total_time, colour="red")
-            progress_bar.update(self.curr_time)
+        children = browser.get_children(By.XPATH, '//*[@id="vjs_video_3"]/div[7]/div[10]/div[1]')
+        children = children if children is not None else []
+        if len(children) == 2:
+            slide_show_path = '//*[@id="vjs_video_3"]/div[7]/div[10]/div[1]/div[1]'
+            presenter_path = '//*[@id="vjs_video_3"]/div[7]/div[10]/div[1]/div[2]'
+        else:
+            slide_show_path = '//*[@id="vjs_video_3"]/div[7]/div[10]/div[1]/div[2]'
+            presenter_path = '//*[@id="vjs_video_3"]/div[7]/div[10]/div[1]/div[3]'
+        browser.sleep(0.5, 1.5)
+        browser.click_execute(By.XPATH, '//*[@id="vjs_video_3"]/div[4]/button[1]', wait=False)
+        browser.sleep(3.5, 4)
 
-            while self.curr_time < self.total_time :
-                try: 
-                    browser.click_button(By.XPATH, slide_show_path, wait=False)
-                    browser.sleep(0.5, 2.5)
+        # Get total time of the video (in minutes)
+        curr_time, total_time = browser.get_video_times_m()
+        self.total_time = total_time
 
-                    browser.screen_shot("slideshow", self.lecture_name)
-                    browser.sleep(0.5, 2.5)
+        browser.sleep(0.5, 1.5)
 
-                    browser.click_execute(By.CLASS_NAME, "mediasite-player__smart-zoom-exit-button", wait=False)
-                    browser.sleep(0.5, 2.5)
+        self.curr_time = curr_time
 
-                    browser.click_button(By.XPATH, presenter_path, wait=False)
-                    browser.sleep(0.5, 2.5)
+        print(f"Scraping video: {self.link}")
 
-                    browser.screen_shot("presenter", self.lecture_name)
-                    browser.sleep(0.5, 2.5)
+        progress_bar = tqdm(desc="Progress: ", total=self.total_time, colour="red")
+        progress_bar.update(self.curr_time)
 
-                    browser.click_execute(By.CLASS_NAME, "mediasite-player__smart-zoom-exit-button", wait=False)
-                    browser.sleep(0.5, 2.5)
+        while self.curr_time < self.total_time:
+            try:
+                browser.click_button(By.XPATH, slide_show_path, wait=False)
+                browser.sleep(0.5, 2.5)
 
-                    browser.next_timestamp(12)
-                    curr_time, _  = browser.get_video_times_m()
-                    time_diff = curr_time - self.curr_time
-                    self.curr_time = curr_time
-                    progress_bar.update(time_diff)
-                except TimeoutException:
-                    progress_bar.update(self.total_time - self.curr_time)
-                    break
-            progress_bar.close()
-            print("Scraping DONE")
-            browser.close_browser()
+                browser.take_screen_shot("slideshow", self.lecture_name)
+                browser.sleep(0.5, 2.5)
+
+                browser.click_execute(By.CLASS_NAME, "mediasite-player__smart-zoom-exit-button", wait=False)
+                browser.sleep(0.5, 2.5)
+
+                browser.click_button(By.XPATH, presenter_path, wait=False)
+                browser.sleep(0.5, 2.5)
+
+                browser.take_screen_shot("presenter", self.lecture_name)
+                browser.sleep(0.5, 2.5)
+
+                browser.click_execute(By.CLASS_NAME, "mediasite-player__smart-zoom-exit-button", wait=False)
+                browser.sleep(0.5, 2.5)
+
+                browser.move_next_timestamp(12)
+                curr_time, _ = browser.get_video_times_m()
+                time_diff = curr_time - self.curr_time
+                self.curr_time = curr_time
+                progress_bar.update(time_diff)
+            except TimeoutException:
+                progress_bar.update(self.total_time - self.curr_time)
+                break
+        progress_bar.close()
+        print("Scraping DONE")
+        browser.close_browser()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Get the url of the recording from the command line
-    with open('./urls.txt', 'r') as f:
+    with open("./urls.txt", "r") as f:
         urls = f.read().splitlines()
 
     for url in urls:
