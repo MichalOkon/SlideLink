@@ -14,9 +14,9 @@ if __name__ == '__main__':
         print(torch.__version__)
         print(torch.backends.cudnn.version())
         results = model.train(
-                batch=2,
+                batch=1,
                 device=0,
                 data="data.yaml",
-                epochs=7,
+                epochs=100,
                 imgsz=640,
         )
