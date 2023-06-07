@@ -3,8 +3,11 @@
     "editor.renderWhitespace": "all",
     "files.autoSave": "afterDelay",
     "python.analysis.typeCheckingMode": "basic",
-    "python.formatting.provider": "black",
+    "python.formatting.provider": "none",
     "python.formatting.blackArgs": [
         "--line-length=120"
     ],
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter"
+    },
 }
