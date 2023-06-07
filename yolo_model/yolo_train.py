@@ -71,15 +71,16 @@ def match_slides():
             continue
 
         img0_raw = cv2.imread(crop_filepath, cv2.IMREAD_GRAYSCALE)
-        img0_raw = cv2.resize(img0_raw, (320, 240))
+        img0_raw = cv2.resize(img0_raw, (640, 480))
         # Display the image
         # cv2.imshow("Image", img0_raw)
         matching_scores = []
         # Pause the program until a key is pressed
         # cv2.waitKey(0)
         for slide_filepath in slides_filepaths:
+
             img1_raw = cv2.imread(slide_filepath, cv2.IMREAD_GRAYSCALE)
-            img1_raw = cv2.resize(img1_raw, (320, 240))
+            img1_raw = cv2.resize(img1_raw, (640, 480))
 
             img0 = torch.from_numpy(img0_raw)[None][None].cuda() / 255.
             img1 = torch.from_numpy(img1_raw)[None][None].cuda() / 255.
@@ -103,23 +104,14 @@ def match_slides():
     return matched_images
 
 
-if __name__ == '__main__':
-    # train_model()
-    # path = os.path.abspath(os.getcwd())
-    # print(path)
-    # detect("../runs/detect/train4/weights/best.pt", "test_dataset")
-    # Print out system filepath
-    print("System filepath: ", os.path.abspath(os.getcwd()))
-
-    matched_images = match_slides()
-
+def analyze_matches(matched_images):
     print(path)
     matched_correctly = 0
 
     for crop_filepath, slide_filepath in matched_images.items():
         crop_filename = crop_filepath.split(sep="\\")[-1]
         slide_filename = slide_filepath.split(sep="\\")[-1]
-        if crop_filename[:8] == slide_filename[:8]:
+        if crop_filename[0:4] == slide_filename[:4]:
             print("Matched!")
             matched_correctly += 1
         print("Crop: ", crop_filepath)
@@ -128,4 +120,62 @@ if __name__ == '__main__':
 
     print("Matched correctly: ", matched_correctly)
     print("Total matched: ", len(matched_images))
-    print("Accuracy: ", matched_correctly / len(matched_images))
+    accuracy = matched_correctly / len(matched_images)
+    print("Accuracy: ", accuracy)
+
+    return accuracy
+
+
+def process_images(images_filepath):
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    images_filepath = os.path.join(script_dir, images_filepath)
+    for filename in os.listdir(images_filepath):
+        image_path = os.path.join(images_filepath, filename)
+        print(image_path)
+        img_raw = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+        # Crop out the bottom of the image
+        img_raw = img_raw[0:img_raw.shape[0] - 50, 0:img_raw.shape[1]]
+        cv2.imwrite(os.path.join(images_filepath, image_path), img_raw)
+
+    def find_duplicates(images_filepath):
+        duplicates_dict = {}
+        deleted = set()
+
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        images_filepath = os.path.join(script_dir, images_filepath)
+        print(images_filepath)
+        # Find identical images
+        for filename in os.listdir(images_filepath):
+            if filename in deleted:
+                continue
+            print(os.path.join(images_filepath, filename))
+            img1 = cv2.imread(os.path.join(images_filepath, filename))
+            print(img1.shape)
+            for filename2 in os.listdir(images_filepath):
+
+                if filename == filename2 or filename2 in deleted:
+                    continue
+
+
+                img2 = cv2.imread(os.path.join(images_filepath, filename2))
+                if img1.shape == img2.shape and not (np.bitwise_xor(img1, img2).any()):
+                    print("Identical images: ", filename, filename2)
+                    duplicates_dict[filename2] = filename
+                    deleted.add(filename2)
+                    os.remove(os.path.join(images_filepath, filename2))
+        return duplicates_dict
+
+    duplicates_dict = find_duplicates(images_filepath)
+    return duplicates_dict
+
+if __name__ == '__main__':
+    # train_model()
+    # path = os.path.abspath(os.getcwd())
+    # print(path)
+    # detect("../runs/detect/train4/weights/best.pt", "test_dataset")
+    # Print out system filepath
+    # print("System filepath: ", os.path.abspath(os.getcwd()))
+    duplicates = process_images("matching_datasets/slides")
+    print("Duplicates: ", duplicates)
+    matched_images = match_slides()
+    analyze_matches(matched_images)
