@@ -1,11 +1,14 @@
 import os
 import sys
+from pathlib import Path
 
+import numpy as np
 import torch
 from ultralytics import YOLO
-from PIL import Image
 import cv2
 
+path = str(Path(Path(__file__).parent.absolute()).parent.absolute())
+sys.path.insert(0, path)
 from LoFTR.src.loftr import LoFTR
 from LoFTR.src.loftr.utils.cvpr_ds_config import default_cfg
 
@@ -33,32 +36,96 @@ def detect(model_path, data_dir):
     for i, result in enumerate(results):
         print(result.boxes.xyxy)
 
-# def pair_slides():
-#     matcher = LoFTR(config=default_cfg)
-#     matcher.load_state_dict(torch.load("weights/loftr_indoor_ds_new.ckpt")['state_dict'])
-#     matcher = matcher.eval().cuda()
-#
-#
-#     slides_dir = "../"
-#     # Rerun this cell (and below) if a new image pair is uploaded.
-#     img0_raw = cv2.imread(image_pair[0], cv2.IMREAD_GRAYSCALE)
-#     img1_raw = cv2.imread(image_pair[1], cv2.IMREAD_GRAYSCALE)
-#     img0_raw = cv2.resize(img0_raw, (640, 480))
-#     img1_raw = cv2.resize(img1_raw, (640, 480))
-#
-#     img0 = torch.from_numpy(img0_raw)[None][None].cuda() / 255.
-#     img1 = torch.from_numpy(img1_raw)[None][None].cuda() / 255.
-#     batch = {'image0': img0, 'image1': img1}
-#
-#     # Inference with LoFTR and get prediction
-#     with torch.no_grad():
-#         matcher(batch)
-#         mkpts0 = batch['mkpts0_f'].cpu().numpy()
-#         mkpts1 = batch['mkpts1_f'].cpu().numpy()
-#         mconf = batch['mconf'].cpu().numpy()
+
+def compute_matching_score(mkpts0):
+    """Compute matching score based on the number of matching points"""
+    return len(mkpts0)
+
+
+def match_slides():
+    matcher = LoFTR(config=default_cfg)
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    weights_path = os.path.join(script_dir, 'weights_loftr', 'loftr_indoor.ckpt')
+    matcher.load_state_dict(torch.load(weights_path)['state_dict'])
+    matcher = matcher.eval().cuda()
+
+    slides_dir = os.path.join(script_dir, 'matching_datasets', 'slides')
+    slides_filepaths = []
+    # Add filepaths of the slides
+    for filename in os.listdir(slides_dir):
+        slides_filepaths.append(os.path.join(slides_dir, filename))
+
+    crops_dir = os.path.join(script_dir, 'matching_datasets', 'crops')
+    crops_filepaths = []
+    # Add filepaths of the crops
+    for filename in os.listdir(crops_dir):
+        crops_filepaths.append(os.path.join(crops_dir, filename))
+
+    matched_images = {}
+    # Loop over all target images
+    for crop_filepath in crops_filepaths:
+        # Break if the filename is longer than 8 characters (incorrectly cropped slides)
+        print(crop_filepath.split(sep="\\")[-1])
+        if len(crop_filepath.split(sep="\\")[-1]) > 8:
+            continue
+
+        img0_raw = cv2.imread(crop_filepath, cv2.IMREAD_GRAYSCALE)
+        img0_raw = cv2.resize(img0_raw, (320, 240))
+        # Display the image
+        # cv2.imshow("Image", img0_raw)
+        matching_scores = []
+        # Pause the program until a key is pressed
+        # cv2.waitKey(0)
+        for slide_filepath in slides_filepaths:
+            img1_raw = cv2.imread(slide_filepath, cv2.IMREAD_GRAYSCALE)
+            img1_raw = cv2.resize(img1_raw, (320, 240))
+
+            img0 = torch.from_numpy(img0_raw)[None][None].cuda() / 255.
+            img1 = torch.from_numpy(img1_raw)[None][None].cuda() / 255.
+            batch = {'image0': img0, 'image1': img1}
+
+            # Inference with LoFTR and get prediction
+            with torch.no_grad():
+                matcher(batch)
+                mkpts0 = batch['mkpts0_f'].cpu().numpy()
+
+            # Compute a matching score
+            matching_score = compute_matching_score(mkpts0)
+            # Add the matching score to the list
+            matching_scores.append(matching_score)
+            print("Matched score: ", matching_score)
+
+        best_matching_image_path = slides_filepaths[np.argmax(matching_scores)]
+        print("Best matching image: ", best_matching_image_path)
+        matched_images[crop_filepath] = best_matching_image_path
+
+    return matched_images
+
 
 if __name__ == '__main__':
     # train_model()
-    path = os.path.abspath(os.getcwd())
+    # path = os.path.abspath(os.getcwd())
+    # print(path)
+    # detect("../runs/detect/train4/weights/best.pt", "test_dataset")
+    # Print out system filepath
+    print("System filepath: ", os.path.abspath(os.getcwd()))
+
+    matched_images = match_slides()
+
     print(path)
-    detect("../runs/detect/train4/weights/best.pt", "test_dataset")
+    matched_correctly = 0
+
+    for crop_filepath, slide_filepath in matched_images.items():
+        crop_filename = crop_filepath.split(sep="\\")[-1]
+        slide_filename = slide_filepath.split(sep="\\")[-1]
+        if crop_filename[:8] == slide_filename[:8]:
+            print("Matched!")
+            matched_correctly += 1
+        print("Crop: ", crop_filepath)
+        print("Slide: ", slide_filepath)
+        print("----------------------------------------------------")
+
+    print("Matched correctly: ", matched_correctly)
+    print("Total matched: ", len(matched_images))
+    print("Accuracy: ", matched_correctly / len(matched_images))
