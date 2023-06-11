@@ -165,5 +165,5 @@ urls.txt
 data_fetch/screenshots/**/*
 *.h5
 logs/
-mrcnn_data/
+split_data/
 wandb/

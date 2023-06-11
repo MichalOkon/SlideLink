@@ -9,24 +9,37 @@ LABELS_FILE_NAME = "labels.json"
 
 curr_path = os.path.dirname(os.path.abspath(__file__))
 
-copy_files_path = os.path.join(curr_path, "mrcnn_data")
+copy_files_path = os.path.join(curr_path, "split_data")
 
 src_dir = os.path.join(curr_path, "screenshots")
 
 shutil.copytree(src_dir, copy_files_path)
 
-data_paths = [name for name in os.listdir(copy_files_path) if os.path.isdir(os.path.join(copy_files_path, name))]
+data_paths = [
+    name
+    for name in os.listdir(copy_files_path)
+    if os.path.isdir(os.path.join(copy_files_path, name))
+]
 
 for data_path in data_paths:
-    shutil.rmtree(os.path.join(os.path.join(copy_files_path, data_path), "slideshow"))
+    shutil.rmtree(
+        os.path.join(os.path.join(copy_files_path, data_path), "slideshow")
+    )
 
 for data_path in data_paths:
     move_dist_path = os.path.join(copy_files_path, data_path)
     move_src_path = os.path.join(move_dist_path, "presenter")
 
-    files_to_copy = [name for name in os.listdir(move_src_path) if os.path.isfile(os.path.join(move_src_path, name))]
+    files_to_copy = [
+        name
+        for name in os.listdir(move_src_path)
+        if os.path.isfile(os.path.join(move_src_path, name))
+    ]
     for file in files_to_copy:
-        shutil.move(os.path.join(move_src_path, file), os.path.join(copy_files_path, f"{data_path}_{file}"))
+        shutil.move(
+            os.path.join(move_src_path, file),
+            os.path.join(copy_files_path, f"{data_path}_{file}"),
+        )
     shutil.rmtree(move_src_path)
     os.rmdir(move_dist_path)
 
