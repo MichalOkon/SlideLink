@@ -166,3 +166,4 @@ data_fetch/screenshots/**/*
 *.h5
 logs/
 mrcnn_data/
+wandb/

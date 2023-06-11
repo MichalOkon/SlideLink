@@ -18,19 +18,16 @@ import tensorflow as tf
 import tensorflow.keras as keras
 import tensorflow.keras.backend as K
 import tensorflow.keras.layers as KL
-import tensorflow.keras.layers as KE
+import tensorflow.keras.layers as KE``
 import tensorflow.keras.utils as KU
 from tensorflow.python.eager import context
 import tensorflow.keras.models as KM
+from keras.utils.data_utils import get_file
 
 from mrcnn import utils
 
-# Requires TensorFlow 2.0+
-from distutils.version import LooseVersion
-
-assert LooseVersion(tf.__version__) >= LooseVersion("2.0")
-
 tf.compat.v1.disable_eager_execution()
+# tf.compat.v1.get_default_graph()
 
 ############################################################
 #  Utility Functions
@@ -1770,6 +1767,12 @@ class DataGenerator(KU.Sequence):
 ############################################################
 
 
+def norm_boxes_graph2(x):
+    boxes, tensor_for_shape = x
+    shape = tf.shape(tensor_for_shape)[1:3]
+    return norm_boxes_graph(boxes, shape)
+
+
 class MaskRCNN(object):
     """Encapsulates the Mask RCNN model functionality.
 
@@ -1821,7 +1824,7 @@ class MaskRCNN(object):
             # [batch, MAX_GT_INSTANCES, (y1, x1, y2, x2)] in image coordinates
             input_gt_boxes = KL.Input(shape=[None, 4], name="input_gt_boxes", dtype=tf.float32)
             # Normalize coordinates
-            gt_boxes = KL.Lambda(lambda x: norm_boxes_graph(x, K.shape(input_image)[1:3]))(input_gt_boxes)
+            gt_boxes = KL.Lambda(lambda x: norm_boxes_graph2(x))([input_gt_boxes, input_image])
             # 3. GT Masks (zero padded)
             # [batch, height, width, MAX_GT_INSTANCES]
             if config.USE_MINI_MASK:
@@ -2133,7 +2136,6 @@ class MaskRCNN(object):
         """Downloads ImageNet trained weights from Keras.
         Returns path to weights file.
         """
-        from keras.utils.data_utils import get_file
 
         TF_WEIGHTS_PATH_NO_TOP = (
             "https://github.com/fchollet/deep-learning-models/"
@@ -2168,7 +2170,7 @@ class MaskRCNN(object):
         # Add L2 Regularization
         # Skip gamma and beta weights of batch normalization layers.
         reg_losses = [
-            keras.regularizers.l2(self.config.WEIGHT_DECAY)(w) / tf.cast(tf.size(input=w), tf.float32)
+            tf.keras.regularizers.l2(self.config.WEIGHT_DECAY)(w) / tf.cast(tf.size(input=w), tf.float32)
             for w in self.keras_model.trainable_weights
             if "gamma" not in w.name and "beta" not in w.name
         ]
@@ -2326,8 +2328,10 @@ class MaskRCNN(object):
 
         # Callbacks
         callbacks = [
-            keras.callbacks.TensorBoard(log_dir=self.log_dir, histogram_freq=0, write_graph=True, write_images=False),
-            keras.callbacks.ModelCheckpoint(self.checkpoint_path, verbose=0, save_weights_only=True),
+            tf.keras.callbacks.TensorBoard(
+                log_dir=self.log_dir, histogram_freq=0, write_graph=True, write_images=False
+            ),
+            tf.keras.callbacks.ModelCheckpoint(self.checkpoint_path, verbose=0, save_weights_only=True),
         ]
 
         # Add custom callbacks to the list

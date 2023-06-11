@@ -12,3 +12,6 @@ cython
 h5py
 imgaug
 IPython[all]
+wandb
+tensorflow-addons==0.16.1
+keras-rl2==1.0.4

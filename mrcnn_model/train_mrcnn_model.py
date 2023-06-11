@@ -31,10 +31,12 @@ import os
 import cv2
 import sys
 import json
+import wandb
 import argparse
 import datetime
 import numpy as np
 import skimage.draw
+from wandb.keras import WandbMetricsLogger, WandbModelCheckpoint
 
 # The template for the code comes from
 # https://github.com/matterport/Mask_RCNN/blob/master/samples/balloon/balloon.py
@@ -186,7 +188,7 @@ class SlideDataset(utils.Dataset):
             super(self.__class__, self).image_reference(image_id)
 
 
-def train(model):
+def train(model, custom_callbacks=None):
     """Train the model."""
     # Training dataset.
     dataset_train = SlideDataset()
@@ -203,7 +205,14 @@ def train(model):
     # COCO trained weights, we don't need to train too long. Also,
     # no need to train all layers, just the heads should do it.
     print("Training network heads")
-    model.train(dataset_train, dataset_val, learning_rate=config.LEARNING_RATE, epochs=config.EPOCHS, layers="heads")
+    model.train(
+        dataset_train,
+        dataset_val,
+        learning_rate=config.LEARNING_RATE,
+        epochs=config.EPOCHS,
+        layers="heads",
+        custom_callbacks=custom_callbacks,
+    )
 
 
 def color_splash(image, mask):
@@ -302,6 +311,15 @@ if __name__ == "__main__":
     parser.add_argument(
         "--video", required=False, metavar="path or URL to video", help="Video to apply the color splash effect on"
     )
+    parser.add_argument(
+        "--wandb",
+        action=argparse.BooleanOptionalAction,
+        required=False,
+        default=False,
+        metavar="use wandb.ai tool",
+        help="Use wandb.ai tool",
+    )
+
     args = parser.parse_args()
 
     # Validate arguments
@@ -360,9 +378,23 @@ if __name__ == "__main__":
     else:
         model.load_weights(weights_path, by_name=True)
 
+    custom_callbacks = None
+    if args.wandb:
+        # Start a run, tracking hyperparameters
+        wandb.init(
+            # set the wandb project where this run will be logged
+            project="slidelink",
+            # track hyperparameters and run metadata with wandb.config
+            config=config.display_dict(),
+        )
+        custom_callbacks = [
+            WandbMetricsLogger(log_freq=1),
+            WandbModelCheckpoint("models"),
+        ]
+
     # Train or evaluate
     if args.command == "train":
-        train(model)
+        train(model, custom_callbacks=custom_callbacks)
     elif args.command == "splash":
         detect_and_color_splash(model, image_path=args.image, video_path=args.video)
     else:
