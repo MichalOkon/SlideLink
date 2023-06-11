@@ -80,6 +80,9 @@ class SlideConfig(Config):
     # Skip detections with < 90% confidence
     DETECTION_MIN_CONFIDENCE = 0.9
 
+    # Number of epochs to train on
+    EPOCHS = 30
+
 
 ############################################################
 #  Dataset
@@ -167,7 +170,7 @@ class SlideDataset(utils.Dataset):
         mask = np.zeros([info["height"], info["width"], len(info["polygons"])], dtype=np.uint8)
         for i, p in enumerate(info["polygons"]):
             # Get indexes of pixels inside the polygon and set them to 1
-            rr, cc = skimage.draw.polygon(p["all_points_y"], p["all_points_x"])
+            rr, cc = skimage.draw.polygon(p["y"], p["x"])
             mask[rr, cc, i] = 1
 
         # Return mask, and array of class IDs of each instance. Since we have
@@ -200,7 +203,7 @@ def train(model):
     # COCO trained weights, we don't need to train too long. Also,
     # no need to train all layers, just the heads should do it.
     print("Training network heads")
-    model.train(dataset_train, dataset_val, learning_rate=config.LEARNING_RATE, epochs=30, layers="heads")
+    model.train(dataset_train, dataset_val, learning_rate=config.LEARNING_RATE, epochs=config.EPOCHS, layers="heads")
 
 
 def color_splash(image, mask):

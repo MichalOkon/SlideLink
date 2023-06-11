@@ -1,8 +1,8 @@
+numpy
 selenium
 tqdm
 pylint
 black
-numpy
 scikit-image
 opencv-python
 tensorflow
