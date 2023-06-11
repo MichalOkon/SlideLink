@@ -163,3 +163,4 @@ secrets.txt
 *.png
 urls.txt
 data_fetch/screenshots/**/*
+*.h5

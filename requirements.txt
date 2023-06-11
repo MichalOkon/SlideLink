@@ -2,3 +2,13 @@ selenium
 tqdm
 pylint
 black
+numpy
+scikit-image
+opencv-python
+tensorflow
+keras
+Pillow
+cython
+h5py
+imgaug
+IPython[all]
