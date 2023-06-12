@@ -15,16 +15,14 @@ from collections import OrderedDict
 import multiprocessing
 import numpy as np
 import tensorflow as tf
-import tensorflow.keras as keras
+from mrcnn import utils
 import tensorflow.keras.backend as K
 import tensorflow.keras.layers as KL
 import tensorflow.keras.layers as KE
 import tensorflow.keras.utils as KU
-from tensorflow.python.eager import context
 import tensorflow.keras.models as KM
-from keras.utils.data_utils import get_file
+from tensorflow.python.eager import context
 
-from mrcnn import utils
 
 tf.compat.v1.disable_eager_execution()
 # tf.compat.v1.get_default_graph()
@@ -457,7 +455,7 @@ class ProposalLayer(KE.Layer):
 
 def log2_graph(x):
     """Implementation of Log2. TF doesn't have a native implementation."""
-    return tf.math.log(x) / tf.math.log(2.0)
+    return tf.math.divide(tf.math.log(x), tf.math.log(2.0))
 
 
 class PyramidROIAlign(KE.Layer):
@@ -513,7 +511,7 @@ class PyramidROIAlign(KE.Layer):
         image_area = tf.cast(image_shape[0] * image_shape[1], tf.float32)
         roi_level = log2_graph(tf.sqrt(h * w) / (224.0 / tf.sqrt(image_area)))
         roi_level = tf.minimum(
-            5, tf.maximum(2, 4 + tf.cast(tf.round(roi_level), tf.int32))
+            5, tf.maximum(2, tf.add(tf.cast(tf.round(roi_level), tf.int32), 4))
         )
         roi_level = tf.squeeze(roi_level, 2)
 
@@ -610,7 +608,10 @@ def overlaps_graph(boxes1, boxes2):
     x1 = tf.maximum(b1_x1, b2_x1)
     y2 = tf.minimum(b1_y2, b2_y2)
     x2 = tf.minimum(b1_x2, b2_x2)
-    intersection = tf.maximum(x2 - x1, 0) * tf.maximum(y2 - y1, 0)
+    intersection = tf.math.multiply(
+        tf.maximum(tf.math.subtract(x2, x1), 0),
+        tf.maximum(tf.math.subtract(y2, y1), 0),
+    )
     # 3. Compute unions
     b1_area = (b1_y2 - b1_y1) * (b1_x2 - b1_x1)
     b2_area = (b2_y2 - b2_y1) * (b2_x2 - b2_x1)
@@ -1290,7 +1291,11 @@ def rpn_class_loss_graph(rpn_match, rpn_class_logits):
     loss = K.sparse_categorical_crossentropy(
         target=anchor_class, output=rpn_class_logits, from_logits=True
     )
-    loss = K.switch(tf.size(input=loss) > 0, K.mean(loss), tf.constant(0.0))
+    loss = K.switch(
+        tf.math.greater(tf.size(input=loss), tf.constant(0)),
+        K.mean(loss),
+        tf.constant(0.0),
+    )
     return loss
 
 
@@ -1320,7 +1325,11 @@ def rpn_bbox_loss_graph(config, target_bbox, rpn_match, rpn_bbox):
 
     loss = smooth_l1_loss(target_bbox, rpn_bbox)
 
-    loss = K.switch(tf.size(input=loss) > 0, K.mean(loss), tf.constant(0.0))
+    loss = K.switch(
+        tf.math.greater(tf.size(input=loss), tf.constant(0)),
+        K.mean(loss),
+        tf.constant(0.0),
+    )
     return loss
 
 
@@ -1339,7 +1348,7 @@ def mrcnn_class_loss_graph(
     # During model building, Keras calls this function with
     # target_class_ids of type float32. Unclear why. Cast it
     # to int to get around it.
-    target_class_ids = tf.cast(target_class_ids, "int64")
+    target_class_ids = tf.cast(target_class_ids, tf.int64)
 
     # Find predictions of classes that are not in the dataset.
     pred_class_ids = tf.argmax(input=pred_class_logits, axis=2)
@@ -1390,7 +1399,7 @@ def mrcnn_bbox_loss_graph(target_bbox, target_class_ids, pred_bbox):
 
     # Smooth-L1 Loss
     loss = K.switch(
-        tf.size(input=target_bbox) > 0,
+        tf.math.greater(tf.size(input=target_bbox), tf.constant(0)),
         smooth_l1_loss(y_true=target_bbox, y_pred=pred_bbox),
         tf.constant(0.0),
     )
@@ -1433,7 +1442,7 @@ def mrcnn_mask_loss_graph(target_masks, target_class_ids, pred_masks):
     # Compute binary cross entropy. If no positive ROIs, then return 0.
     # shape: [batch, roi, num_classes]
     loss = K.switch(
-        tf.size(input=y_true) > 0,
+        tf.math.greater(tf.size(input=y_true), tf.constant(0)),
         K.binary_crossentropy(target=y_true, output=y_pred),
         tf.constant(0.0),
     )
@@ -1517,7 +1526,7 @@ def load_image_gt(dataset, config, image_id, augmentation=None):
             mask.shape == mask_shape
         ), "Augmentation shouldn't change mask size"
         # Change mask back to bool
-        mask = mask.astype(np.bool)
+        mask = mask.astype(np.bool_)
 
     # Note that some boxes might be all zeros if the corresponding mask got cropped out.
     # and here is to filter them out
@@ -2189,10 +2198,9 @@ class MaskRCNN(object):
         # Image size must be dividable by 2 multiple times
         h, w = config.IMAGE_SHAPE[:2]
         if h / 2**6 != int(h / 2**6) or w / 2**6 != int(w / 2**6):
-            raise Exception(
-                "Image size must be dividable by 2 at least 6 times "
-                "to avoid fractions when downscaling and upscaling."
-                "For example, use 256, 320, 384, 448, 512, ... etc. "
+            raise ValueError(
+                "Image size must be dividable by 2 at least 6 times to avoid fractions when downscaling and upscaling."
+                + "For example, use 256, 320, 384, 448, 512, ... etc. "
             )
 
         # Inputs
@@ -2320,14 +2328,8 @@ class MaskRCNN(object):
             anchors = np.broadcast_to(
                 anchors, (config.BATCH_SIZE,) + anchors.shape
             )
-            # A hack to get around Keras's bad support for constants
-            # 원본 tf1 버전 코드
-            # anchors = tf.keras.layers.Lambda(lambda x: tf.Variable(anchors), name="anchors")(input_image)
-            """케라스에서 상수 레이어에 해당하는 레이어가 없어서 람다 레이어를 사용하는 편법이 있었는데
-            이제 통하지 않는다!
-            그건 그렇고 인풋 함수가 있는데 왜 저렇게 짠거지??? 아무튼 커스텀 레이어 작성해서 상수 텐서를 리턴해주기로 함.
-            """
 
+            # A hack to get around Keras's bad support for constants
             class ConstLayer(tf.keras.layers.Layer):
                 def __init__(self, x, name=None):
                     super(ConstLayer, self).__init__(name=name)
@@ -2620,7 +2622,7 @@ class MaskRCNN(object):
             "releases/download/v0.2/"
             "resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5"
         )
-        weights_path = get_file(
+        weights_path = tf.keras.utils.get_file(
             "resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5",
             TF_WEIGHTS_PATH_NO_TOP,
             cache_subdir="models",
@@ -2783,7 +2785,6 @@ class MaskRCNN(object):
         layers,
         augmentation=None,
         custom_callbacks=None,
-        no_augmentation_sources=None,
     ):
         """Train the model.
         train_dataset, val_dataset: Training and validation Dataset objects.
