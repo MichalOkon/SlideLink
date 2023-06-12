@@ -36,6 +36,7 @@ import argparse
 import datetime
 import numpy as np
 import skimage.draw
+from tqdm import tqdm
 from skimage.io import imread, imsave
 from skimage.color import gray2rgb, rgb2gray
 from wandb.keras import WandbMetricsLogger, WandbModelCheckpoint
@@ -50,6 +51,7 @@ ROOT_DIR = os.path.abspath("../")
 sys.path.append(ROOT_DIR)  # To find local version of the library
 from mrcnn.config import Config
 from mrcnn import model as modellib, utils
+from mrcnn import visualize
 
 # Path to trained weights file
 COCO_WEIGHTS_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
@@ -57,6 +59,7 @@ COCO_WEIGHTS_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
 # Directory to save logs and model checkpoints, if not provided
 # through the command line argument --logs
 DEFAULT_LOGS_DIR = os.path.join(ROOT_DIR, "logs")
+
 
 ############################################################
 #  Configurations
@@ -85,7 +88,7 @@ class SlideConfig(Config):
     DETECTION_MIN_CONFIDENCE = 0.9
 
     # Number of epochs to train on
-    EPOCHS = 30
+    EPOCHS = 1
 
 
 ############################################################
@@ -100,7 +103,7 @@ class SlideDataset(utils.Dataset):
         subset: Subset to load: train or val
         """
         # Add classes. We have only one class to add.
-        self.add_class("slide", 1, "slide")
+        self.add_class("slide", 1, "Slide")
 
         # Train or validation dataset?
         assert subset in ["train", "val"]
@@ -195,7 +198,14 @@ class SlideDataset(utils.Dataset):
             super(self.__class__, self).image_reference(image_id)
 
 
-def train(model, custom_callbacks=None):
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
+
+
+def train(model, custom_callbacks=None, weights_name=""):
     """Train the model."""
     # Training dataset.
     dataset_train = SlideDataset()
@@ -221,6 +231,16 @@ def train(model, custom_callbacks=None):
         custom_callbacks=custom_callbacks,
     )
 
+    model_save_path = os.path.join(
+        ROOT_DIR, f"slides_{weights_name}_mask_rcnn.h5"
+    )
+    model.keras_model.save_weights(model_save_path)
+
+    with open(
+        os.path.join(ROOT_DIR, f"slides_{weights_name}_mask_rcnn.json"), "w"
+    ) as outfile:
+        json.dump(config.display_dict(), outfile, cls=NumpyEncoder)
+
 
 def color_splash(image, mask):
     """Apply color splash effect.
@@ -231,6 +251,8 @@ def color_splash(image, mask):
     """
     # Make a grayscale copy of the image. The grayscale copy still
     # has 3 RGB channels, though.
+    if image.shape[-1] == 4:
+        image = image[..., :3]
     gray = gray2rgb(rgb2gray(image)) * 255
     # Copy color pixels from the original color image where mask is set
     if mask.shape[-1] > 0:
@@ -297,6 +319,76 @@ def detect_and_color_splash(model, image_path=None, video_path=None):
     print("Saved to ", file_name)
 
 
+def visualize_detection(model, image_path=""):
+    img_cvt = imread(image_path)
+    results = model.detect([img_cvt], verbose=1)
+
+    # Visualize results
+    r = results[0]
+
+    print(r)
+    visualize.display_instances(
+        img_cvt,
+        r["rois"],
+        r["masks"],
+        r["class_ids"],
+        ["Slide"],
+        r["scores"],
+        show_caption=False,
+        show_mask_polygon=True,
+        show_mask=False,
+    )
+
+
+def get_width(xy):
+    width = abs(xy[1] - xy[3])
+    return width
+
+
+def get_height(xy):
+    height = abs(xy[0] - xy[2])
+    return height
+
+
+def get_area(xy):
+    width = get_width(xy)
+    height = get_height(xy)
+    area = width * height
+    return area
+
+
+def get_biggest_box(xy_list):
+    biggest_area = 0
+    for i, xy in enumerate(xy_list):
+        area = get_area(xy)
+        if area > biggest_area:
+            biggest_area = area
+            biggest_xy = xy
+            ix = i
+    return biggest_xy, ix
+
+
+def crop_predictions(model, input_dir, output_dir):
+    image_files = [
+        name
+        for name in os.listdir(input_dir)
+        if os.path.isfile(os.path.join(input_dir, name)) and "png" in name
+    ]
+    for image_file in tqdm(image_files):
+        img_cvt = imread(os.path.join(input_dir, image_file))
+        results = model.detect([img_cvt])
+        if len(results) == 0:
+            continue
+        # Visualize results
+        r = results[0]
+        big_box, _ = get_biggest_box(r["rois"])
+        x, y, width, height = big_box
+        crop_img = img_cvt[x:width, y:height]
+
+        image_save_path = os.path.join(output_dir, f"pred_{image_file}")
+        cv2.imwrite(image_save_path, cv2.cvtColor(crop_img, cv2.COLOR_RGB2BGR))
+
+
 ############################################################
 #  Training
 ############################################################
@@ -307,7 +399,7 @@ if __name__ == "__main__":
         description="Train Mask R-CNN to detect slides."
     )
     parser.add_argument(
-        "command", metavar="<command>", help="'train' or 'splash'"
+        "command", metavar="<command>", help="'train' or 'splash' or 'dectect'"
     )
     parser.add_argument(
         "--dataset",
@@ -348,12 +440,22 @@ if __name__ == "__main__":
         metavar="use wandb.ai tool",
         help="Use wandb.ai tool",
     )
+    parser.add_argument(
+        "--test-images",
+        required=False,
+        metavar="path to test images",
+        help="Images to test predictions against",
+    )
 
     args = parser.parse_args()
 
     # Validate arguments
     if args.command == "train":
         assert args.dataset, "Argument --dataset is required for training"
+    elif args.command == "predict":
+        assert (
+            args.test_images
+        ), "Argument --test-image is required for predictions"
     elif args.command == "splash":
         assert (
             args.image or args.video
@@ -404,21 +506,17 @@ if __name__ == "__main__":
 
     # Load weights
     print("Loading weights ", weights_path)
-    if args.weights.lower() == "coco":
-        # Exclude the last layers because they require a matching
-        # number of classes
-        model.load_weights(
-            weights_path,
-            by_name=True,
-            exclude=[
-                "mrcnn_class_logits",
-                "mrcnn_bbox_fc",
-                "mrcnn_bbox",
-                "mrcnn_mask",
-            ],
-        )
-    else:
-        model.load_weights(weights_path, by_name=True)
+
+    model.load_weights(
+        weights_path,
+        by_name=True,
+        exclude=[
+            "mrcnn_class_logits",
+            "mrcnn_bbox_fc",
+            "mrcnn_bbox",
+            "mrcnn_mask",
+        ],
+    )
 
     custom_callbacks = None
     if args.wandb:
@@ -436,11 +534,23 @@ if __name__ == "__main__":
 
     # Train or evaluate
     if args.command == "train":
-        train(model, custom_callbacks=custom_callbacks)
+        train(
+            model,
+            custom_callbacks=custom_callbacks,
+            weights_name=args.weights.lower(),
+        )
     elif args.command == "splash":
         detect_and_color_splash(
             model, image_path=args.image, video_path=args.video
         )
+    elif args.command == "detect":
+        visualize_detection(model, image_path=args.image)
+    elif args.command == "predict":
+        new_path = os.path.dirname(os.path.abspath(__file__))
+        new_path = os.path.join(new_path, "test-predictions")
+        if not os.path.exists(new_path):
+            os.makedirs(new_path)
+        crop_predictions(model, args.test_images, new_path)
     else:
         print(
             "'{}' is not recognized. "
