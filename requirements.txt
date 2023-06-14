@@ -1,2 +1,9 @@
 selenium
 tqdm
+numpy
+opencv-python
+matplotlib
+scikit-image
+mrcnn
+ultralytics
+Pillow
