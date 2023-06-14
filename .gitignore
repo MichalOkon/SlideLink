@@ -167,3 +167,4 @@ data_fetch/screenshots/**/*
 logs/
 split_data/
 wandb/
+/LoFTR/weights/

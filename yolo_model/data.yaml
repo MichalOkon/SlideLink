@@ -1,0 +1,5 @@
+train: C:\Users\micha\Documents\Przegrane\Delft\masters\CV\CV_project\yolo_model\datasets\train\images
+val: C:\Users\micha\Documents\Przegrane\Delft\masters\CV\CV_project\yolo_model\datasets\val\images
+test: C:\Users\micha\Documents\Przegrane\Delft\masters\CV\CV_project\yolo_model\datasets\test\images
+
+names: ['slide']
