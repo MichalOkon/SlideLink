@@ -20,7 +20,7 @@ def train_model():
     print(torch.cuda.is_available())
     print(torch.__version__)
     print(torch.backends.cudnn.version())
-    results = model.train(
+    model.train(
         batch=1,
         device=0,
         data="data.yaml",
@@ -46,7 +46,7 @@ def match_slides():
     matcher = LoFTR(config=default_cfg)
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    weights_path = os.path.join(script_dir, 'weights_loftr', 'loftr_indoor.ckpt')
+    weights_path = os.path.join(script_dir, 'weights_loftr', 'loftr_outdoor.ckpt')
     matcher.load_state_dict(torch.load(weights_path)['state_dict'])
     matcher = matcher.eval().cuda()
 
@@ -84,7 +84,6 @@ def match_slides():
 
             img1 = torch.from_numpy(img1_raw)[None][None].cuda() / 255.
             batch = {'image0': img0, 'image1': img1}
-
             # Inference with LoFTR and get prediction
             with torch.no_grad():
                 matcher(batch)
@@ -96,7 +95,7 @@ def match_slides():
             matching_scores.append(matching_score)
             print("Matched score: ", matching_score)
 
-        if (np.max(matching_scores) < 10):
+        if (np.max(matching_scores) < 50):
             print("No match found")
             matched_images[crop_filepath] = "No match found"
             continue
