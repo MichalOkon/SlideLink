@@ -52,6 +52,7 @@ sys.path.append(ROOT_DIR)  # To find local version of the library
 from mrcnn.config import Config
 from mrcnn import model as modellib, utils
 from mrcnn import visualize
+from mrcnn.model import evaluate_model
 
 # Path to trained weights file
 COCO_WEIGHTS_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
@@ -106,7 +107,7 @@ class SlideDataset(utils.Dataset):
         self.add_class("slide", 1, "Slide")
 
         # Train or validation dataset?
-        assert subset in ["train", "val"]
+        assert subset in ["train", "val", "test"]
         dataset_dir = os.path.join(dataset_dir, subset)
 
         # Load annotations
@@ -340,34 +341,6 @@ def visualize_detection(model, image_path=""):
     )
 
 
-def get_width(xy):
-    width = abs(xy[1] - xy[3])
-    return width
-
-
-def get_height(xy):
-    height = abs(xy[0] - xy[2])
-    return height
-
-
-def get_area(xy):
-    width = get_width(xy)
-    height = get_height(xy)
-    area = width * height
-    return area
-
-
-def get_biggest_box(xy_list):
-    biggest_area = 0
-    for i, xy in enumerate(xy_list):
-        area = get_area(xy)
-        if area > biggest_area:
-            biggest_area = area
-            biggest_xy = xy
-            ix = i
-    return biggest_xy, ix
-
-
 def crop_predictions(model, input_dir, output_dir):
     image_files = [
         name
@@ -377,11 +350,12 @@ def crop_predictions(model, input_dir, output_dir):
     for image_file in tqdm(image_files):
         img_cvt = imread(os.path.join(input_dir, image_file))
         results = model.detect([img_cvt])
-        if len(results) == 0:
+        if len(results) == 0 or len(results[0]["rois"]) == 0:
             continue
         # Visualize results
         r = results[0]
-        big_box, _ = get_biggest_box(r["rois"])
+        highest_score_index = np.argmax(r["scores"])
+        big_box = r["rois"][highest_score_index]
         x, y, width, height = big_box
         crop_img = img_cvt[x:width, y:height]
 
@@ -475,6 +449,7 @@ if __name__ == "__main__":
             # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
             GPU_COUNT = 1
             IMAGES_PER_GPU = 1
+            USE_MINI_MASK = False
 
         config = InferenceConfig()
     config.display()
@@ -551,6 +526,15 @@ if __name__ == "__main__":
         if not os.path.exists(new_path):
             os.makedirs(new_path)
         crop_predictions(model, args.test_images, new_path)
+    elif args.command == "evaluate":
+        test_set = SlideDataset()
+        print(args.dataset)
+        test_set.load_slides(args.dataset, "test")
+        test_set.prepare()
+        test_mAP, test_mAR, f1_test = evaluate_model(test_set, model, config)
+        print(f"mAP: {test_mAP}")
+        print(f"mAR: {test_mAR}")
+        print(f"F1 : {f1_test}")
     else:
         print(
             "'{}' is not recognized. "
