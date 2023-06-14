@@ -71,7 +71,8 @@ def match_slides():
             continue
 
         img0_raw = cv2.imread(crop_filepath, cv2.IMREAD_GRAYSCALE)
-        img0_raw = cv2.resize(img0_raw, (960, 720))
+        img0_raw = cv2.resize(img0_raw, (640, 320))
+        img0 = torch.from_numpy(img0_raw)[None][None].cuda() / 255.
         # Display the image
         # cv2.imshow("Image", img0_raw)
         matching_scores = []
@@ -79,9 +80,8 @@ def match_slides():
         # cv2.waitKey(0)
         for slide_filepath in slides_filepaths:
             img1_raw = cv2.imread(slide_filepath, cv2.IMREAD_GRAYSCALE)
-            img1_raw = cv2.resize(img1_raw, (960, 720))
+            img1_raw = cv2.resize(img1_raw, (640, 320))
 
-            img0 = torch.from_numpy(img0_raw)[None][None].cuda() / 255.
             img1 = torch.from_numpy(img1_raw)[None][None].cuda() / 255.
             batch = {'image0': img0, 'image1': img1}
 
@@ -96,31 +96,44 @@ def match_slides():
             matching_scores.append(matching_score)
             print("Matched score: ", matching_score)
 
-        best_matching_image_path = slides_filepaths[np.argmax(matching_scores)]
-        print("Best matching image: ", best_matching_image_path)
-        matched_images[crop_filepath] = best_matching_image_path
+        if (np.max(matching_scores) < 10):
+            print("No match found")
+            matched_images[crop_filepath] = "No match found"
+            continue
+        else:
+            best_matching_image_path = slides_filepaths[np.argmax(matching_scores)]
+            print("Best matching image: ", best_matching_image_path)
+            matched_images[crop_filepath] = best_matching_image_path
 
     return matched_images
 
 
 def analyze_matches(matched_images, duplicates_dict):
+    def print_match(crop_filepath, slide_filepath):
+        print("Crop: ", crop_filepath)
+        print("Slide: ", slide_filepath)
+        print("----------------------------------------------------")
+
     print(path)
     matched_correctly = 0
-
+    matched = 0
     for crop_filepath, slide_filepath in matched_images.items():
+        if slide_filepath == "No match found":
+            print_match(crop_filepath, slide_filepath)
+            continue
+        matched += 1
         crop_filename = crop_filepath.split(sep="\\")[-1][:4]
         slide_filename = slide_filepath.split(sep="\\")[-1][:4]
         if duplicates_dict[crop_filename] == duplicates_dict[slide_filename]:
             print("Matched!")
             matched_correctly += 1
-        print("Crop: ", crop_filepath)
-        print("Slide: ", slide_filepath)
-        print("----------------------------------------------------")
+        print_match(crop_filepath, slide_filepath)
 
     print("Matched correctly: ", matched_correctly)
-    print("Total matched: ", len(matched_images))
-    accuracy = matched_correctly / len(matched_images)
+    print("Total matched: ", matched)
+    accuracy = matched_correctly / matched
     print("Accuracy: ", accuracy)
+    print("Unidentified: ", len(matched_images) - matched)
 
     return accuracy
 
