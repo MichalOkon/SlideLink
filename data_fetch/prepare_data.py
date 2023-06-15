@@ -97,7 +97,7 @@ def json_to_yolo_format(json_data, image_dir):
 # Get original data folder path
 src_dir = os.path.join(CURRENT_DIR_PATH, "screenshots")
 # Preprocessed data folder path
-final_dist_root_path = os.path.join(CURRENT_DIR_PATH, "preprocessed_data")
+final_dist_root_path = os.path.join(CURRENT_DIR_PATH, "prepared_data")
 # Copy all files the new folder
 shutil.copytree(src_dir, final_dist_root_path)
 
@@ -114,7 +114,7 @@ for data_path in lecture_data_paths:
     shutil.rmtree(
         os.path.join(os.path.join(final_dist_root_path, data_path), "slideshow")
     )
-# Move all files to the newly created "preprocessed_data" directory
+# Move all files to the newly created "prepared_data" directory
 for data_path in lecture_data_paths:
     move_dist_path = os.path.join(final_dist_root_path, data_path)
     move_src_path = os.path.join(move_dist_path, "presenter")

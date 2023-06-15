@@ -165,7 +165,6 @@ urls.txt
 data_fetch/screenshots/**/*
 *.h5
 logs/
-split_data/
-preprocessed_data/
+prepared_data/
 wandb/
 /LoFTR/weights/
