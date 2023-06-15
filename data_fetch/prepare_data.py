@@ -226,3 +226,18 @@ for folder in data_folders:
         with open(new_yolo_label_file_path, "w") as f:
             f.write("\n".join(lines))
     os.remove(labels_file_path)
+
+    images_names = [
+        name
+        for name in os.listdir(curr_yolo_data_path)
+        if os.path.isfile(os.path.join(curr_yolo_data_path, name))
+        and "png" in name
+    ]
+
+    images_folder_path = os.path.join(curr_yolo_data_path, "images")
+    os.mkdir(images_folder_path)
+    for image_name in images_names:
+        os.rename(
+            os.path.join(curr_yolo_data_path, image_name),
+            os.path.join(images_folder_path, image_name),
+        )
