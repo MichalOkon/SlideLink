@@ -13,3 +13,6 @@ h5py
 imgaug
 IPython[all]
 wandb
+typer[all]
+ultralytics
+torch

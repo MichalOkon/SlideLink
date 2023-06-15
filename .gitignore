@@ -168,3 +168,6 @@ logs/
 prepared_data/
 wandb/
 /LoFTR/weights/
+runs/
+*.pt
+data.yaml
