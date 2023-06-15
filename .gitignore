@@ -166,5 +166,6 @@ data_fetch/screenshots/**/*
 *.h5
 logs/
 split_data/
+preprocessed_data/
 wandb/
 /LoFTR/weights/
