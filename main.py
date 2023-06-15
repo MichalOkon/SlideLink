@@ -3,6 +3,7 @@ from enum import Enum
 from typer import Typer, Argument, Option
 from typing_extensions import Annotated
 from yolo_model.model_run import train_model, create_local_yolo_settings
+from data_fetch.prepare_data import prepare_image_data
 
 
 class NetworkType(str, Enum):
@@ -27,6 +28,7 @@ def train(
         int, Option(help="Number of epochs to train model on.")
     ] = 100,
 ):
+    """Trains a specified model."""
     match model_name:
         case NetworkType.YOLO:
             create_local_yolo_settings()
@@ -44,6 +46,13 @@ def evaluate(model_name: str, model_path: str = "", verbose: bool = False):
     print(f"Picked {model_name}{from_text}. Have a good day.")
     if verbose:
         print("Verbose: ON")
+
+
+@APP.command()
+def prepare_data():
+    """Prepared image data before training models. Takes random lecture as test
+    set and divides rest into train and validation set."""
+    prepare_image_data()
 
 
 if __name__ == "__main__":
