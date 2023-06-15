@@ -1,5 +1,6 @@
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -56,7 +57,7 @@ def match_slides():
     for filename in os.listdir(slides_dir):
         slides_filepaths.append(os.path.join(slides_dir, filename))
 
-    crops_dir = os.path.join(script_dir, 'matching_datasets', 'crops')
+    crops_dir = os.path.join(script_dir, 'matching_datasets', 'recordings')
     crops_filepaths = []
     # Add filepaths of the crops
     for filename in os.listdir(crops_dir):
@@ -134,6 +135,13 @@ def analyze_matches(matched_images, duplicates_dict):
     print("Accuracy: ", accuracy)
     print("Unidentified: ", len(matched_images) - matched)
 
+    # Write results to a file
+    time = str(datetime.now()).replace(":", "_").replace(" ", "_")
+    with open(f"results_{time}.txt", "w") as f:
+        f.write("Matched correctly: " + str(matched_correctly) + "\n")
+        f.write("Total matched: " + str(matched) + "\n")
+        f.write("Accuracy: " + str(accuracy) + "\n")
+        f.write("Unidentified: " + str(len(matched_images) - matched) + "\n")
     return accuracy
 
 
