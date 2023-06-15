@@ -155,7 +155,8 @@ for file_json in json_label_files:
 labels_file_path = os.path.join(final_dist_root_path, LABELS_FILE_NAME)
 with open(labels_file_path, "w") as fp:
     json.dump(res_dict, fp)
-os.remove(os.path.join(final_dist_root_path, ".gitkeep"))
+if os.path.exists(os.path.join(final_dist_root_path, ".gitkeep")):
+    os.remove(os.path.join(final_dist_root_path, ".gitkeep"))
 
 ####### Move Everything to new train, validation and test directories for Mask-RCNN model ###########
 

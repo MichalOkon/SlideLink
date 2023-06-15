@@ -1,7 +1,7 @@
 import os
 import sys
-import yaml
 import cv2
+import yaml
 import torch
 import shutil
 import numpy as np
@@ -9,6 +9,7 @@ import numpy as np
 # from pathlib import Path
 from datetime import datetime
 from ultralytics import YOLO
+
 
 # path = str(Path(Path(__file__).parent.absolute()).parent.absolute())
 # sys.path.insert(0, path)
@@ -24,11 +25,12 @@ YOLO_TRAIN_LOGS_DIR = os.path.join(
 SAVED_MODELS_DIR = os.path.join(CURRENT_DIR, "saved_models")
 
 
-def train_model(save_model_dir: str = SAVED_MODELS_DIR):
+def train_model(save_model_dir: str = SAVED_MODELS_DIR, epochs: int = 100):
     """Train YOLO model.
 
     Args:
         save_model_dir (str, optional): folder to save the trained model to. Defaults to CURRENT_DIR.
+        epochs (int, optional): Number of epochs to run. Defaults to 100.
     """
     model = YOLO(os.path.join(CURRENT_DIR, "yolov8n.pt"))
     torch.cuda.empty_cache()
@@ -40,7 +42,7 @@ def train_model(save_model_dir: str = SAVED_MODELS_DIR):
         batch=1,
         device=0,
         data=DATA_INFO_PATH,
-        epochs=100,
+        epochs=epochs,
         imgsz=640,
     )
     time = str(datetime.now()).replace(":", "_").replace(" ", "_")
@@ -94,7 +96,7 @@ def match_slides():
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     weights_path = os.path.join(
-        script_dir, "weights_loftr", "loftr_indoor.ckpt"
+        script_dir, "weights_loftr", "loftr_outdoor.ckpt"
     )
     matcher.load_state_dict(torch.load(weights_path)["state_dict"])
     matcher = matcher.eval().cuda()
@@ -105,7 +107,7 @@ def match_slides():
     for filename in os.listdir(slides_dir):
         slides_filepaths.append(os.path.join(slides_dir, filename))
 
-    crops_dir = os.path.join(script_dir, "matching_datasets", "crops")
+    crops_dir = os.path.join(script_dir, "matching_datasets", "recordings")
     crops_filepaths = []
     # Add filepaths of the crops
     for filename in os.listdir(crops_dir):
@@ -133,7 +135,6 @@ def match_slides():
 
             img1 = torch.from_numpy(img1_raw)[None][None].cuda() / 255.0
             batch = {"image0": img0, "image1": img1}
-
             # Inference with LoFTR and get prediction
             with torch.no_grad():
                 matcher(batch)
@@ -145,7 +146,7 @@ def match_slides():
             matching_scores.append(matching_score)
             print("Matched score: ", matching_score)
 
-        if np.max(matching_scores) < 10:
+        if np.max(matching_scores) < 50:
             print("No match found")
             matched_images[crop_filepath] = "No match found"
             continue
@@ -186,6 +187,13 @@ def analyze_matches(matched_images, duplicates_dict):
     print("Accuracy: ", accuracy)
     print("Unidentified: ", len(matched_images) - matched)
 
+    # Write results to a file
+    time = str(datetime.now()).replace(":", "_").replace(" ", "_")
+    with open(f"results_{time}.txt", "w") as f:
+        f.write("Matched correctly: " + str(matched_correctly) + "\n")
+        f.write("Total matched: " + str(matched) + "\n")
+        f.write("Accuracy: " + str(accuracy) + "\n")
+        f.write("Unidentified: " + str(len(matched_images) - matched) + "\n")
     return accuracy
 
 

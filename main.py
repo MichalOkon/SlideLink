@@ -1,6 +1,6 @@
 """Main CLI APPlication file."""
 from enum import Enum
-from typer import Typer, Argument
+from typer import Typer, Argument, Option
 from typing_extensions import Annotated
 from yolo_model.model_run import train_model, create_local_yolo_settings
 
@@ -22,12 +22,15 @@ def train(
             metavar="model-type",
             help="The name of the model to train.",
         ),
-    ]
+    ],
+    epochs: Annotated[
+        int, Option(help="Number of epochs to train model on.")
+    ] = 100,
 ):
     match model_name:
         case NetworkType.YOLO:
             create_local_yolo_settings()
-            train_model()
+            train_model(epochs=epochs)
         case NetworkType.MASK_RCNN:
             print(f"Picked {model_name.value}")
         case NetworkType.LOFTR:
