@@ -1,4 +1,3 @@
-numpy
 selenium
 tqdm
 pylint
@@ -13,3 +12,10 @@ h5py
 imgaug
 IPython[all]
 wandb
+numpy
+opencv-python
+matplotlib
+scikit-image
+mrcnn
+ultralytics
+Pillow
