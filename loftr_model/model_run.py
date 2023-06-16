@@ -3,7 +3,7 @@ import sys
 import cv2
 import torch
 import json
-import shutil
+from tqdm import tqdm
 import numpy as np
 from pathlib import Path
 from datetime import datetime
@@ -44,7 +44,7 @@ def match_slides(slides_dir, crops_dir, is_weight_outdoor=True):
 
     matched_images = {}
     # Loop over all target images
-    for crop_filepath in crops_filepaths:
+    for crop_filepath in tqdm(crops_filepaths):
         # Break if the filename is longer than 8 characters (incorrectly cropped slides)
 
         img0_raw = cv2.imread(crop_filepath, cv2.IMREAD_GRAYSCALE)
@@ -70,12 +70,9 @@ def match_slides(slides_dir, crops_dir, is_weight_outdoor=True):
             matching_score = compute_matching_score(mkpts0)
             # Add the matching score to the list
             matching_scores.append(matching_score)
-            print("Matched score: ", matching_score)
 
         if np.max(matching_scores) < 50:
-            print("No match found")
             matched_images[crop_filepath] = "No match found"
-            continue
         else:
             best_matching_image_path = slides_filepaths[
                 np.argmax(matching_scores)

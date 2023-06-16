@@ -196,10 +196,6 @@ def prepare_image_data():
             )
         shutil.rmtree(move_src_path)
 
-    duplicates_dict = process_images(slides_dir)
-
-    with open(os.path.join(slides_dir, "duplicates.json"), "w") as fp:
-        json.dump(duplicates_dict, fp)
     # Move all files to the newly created "prepared_data" directory
     for data_path in lecture_names:
         move_dist_path = os.path.join(final_dist_root_path, data_path)
@@ -230,7 +226,9 @@ def prepare_image_data():
     # Move all labels to one file
     res_dict = dict()
     for file_json in json_label_files:
-        with open(os.path.join(final_dist_root_path, file_json)) as json_file:
+        with open(
+            os.path.join(final_dist_root_path, file_json), "r"
+        ) as json_file:
             data = json.load(json_file)
         new_file_name = file_json.split("_")[0]
         for key in data:
@@ -268,6 +266,15 @@ def prepare_image_data():
     )
     train_data, val_data = train_test_split(train_data, split_percent=0.8)
     data_lists = [train_data, val_data, test_data]
+
+    for file in os.listdir(slides_dir):
+        if ".png" in file and test_data_lecture not in file:
+            os.remove(os.path.join(slides_dir, file))
+
+    duplicates_dict = process_images(slides_dir)
+
+    with open(os.path.join(slides_dir, "duplicates.json"), "w") as fp:
+        json.dump(duplicates_dict, fp)
 
     # Move files to the correct location
     for i, data_dicts_list in enumerate(data_lists):
