@@ -41,6 +41,9 @@ def match_slides(slides_dir, crops_dir, is_weight_outdoor=True):
     for filename in os.listdir(crops_dir):
         if "png" in filename:
             crops_filepaths.append(os.path.join(crops_dir, filename))
+        elif "jpg" in filename:
+            filename = filename.replace("jpg", "png")
+            crops_filepaths.append(os.path.join(crops_dir, filename))
 
     matched_images = {}
     # Loop over all target images
