@@ -114,19 +114,19 @@ def train(
     ] = MaskRCNNWeights.NONE,
 ):
     """Trains a specified model."""
-    match model_name:
-        case TrainNetworkType.YOLO:
-            if weights is not MaskRCNNWeights.NONE:
-                raise BadParameter("Weights only for MASK RCNN.")
-            train_yolo(epochs)
-        case TrainNetworkType.MASK_RCNN:
-            if weights is MaskRCNNWeights.NONE:
-                raise BadParameter("Weights must be loaded for MASK RCNN.")
-            train_mask_rcnn(epochs, weights)
-        case TrainNetworkType.ALL:
-            for pre_weight in ["imagenet", "coco"]:
-                train_mask_rcnn(epochs, pre_weight)
-            train_yolo(epochs)
+    if model_name == TrainNetworkType.YOLO:
+        if weights is not MaskRCNNWeights.NONE:
+            raise BadParameter("Weights only for MASK RCNN.")
+        train_yolo(epochs)
+    if model_name == TrainNetworkType.MASK_RCNN:
+        if weights is MaskRCNNWeights.NONE:
+            raise BadParameter("Weights must be loaded for MASK RCNN.")
+        train_mask_rcnn(epochs, weights)
+    if model_name == TrainNetworkType.ALL:
+        for pre_weight in ["imagenet", "coco"]:
+            train_mask_rcnn(epochs, pre_weight)
+        train_yolo(epochs)
+
 
 
 @CLI.command()
@@ -158,13 +158,12 @@ def detect_crop(
     ] = "",
 ):
     """Detect areas and crop."""
-    match model_name:
-        case TrainNetworkType.YOLO:
-            detect(model_path)
-        case TrainNetworkType.MASK_RCNN:
-            detect_mask_rcnn(model_path)
-        case TrainNetworkType.ALL:
-            raise BadParameter("Not implemented.")
+    if model_name == TrainNetworkType.YOLO:
+        detect(model_path)
+    if model_name == TrainNetworkType.MASK_RCNN:
+        detect_mask_rcnn(model_path)
+    if model_name == TrainNetworkType.ALL:
+        raise BadParameter("Not implemented.")
 
 
 if __name__ == "__main__":
