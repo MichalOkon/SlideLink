@@ -1,8 +1,11 @@
 import os
+import cv2
 import json
 import math
 import random
 import shutil
+import numpy as np
+from tqdm import tqdm
 from PIL import Image
 from typing import Dict, Any, List, Tuple
 
@@ -115,6 +118,49 @@ def json_to_yolo_format(json_data, image_dir):
     return yolo_data
 
 
+def find_duplicates(images_filepath):
+    duplicates_dict = {}
+    deleted = set()
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    images_filepath = os.path.join(script_dir, images_filepath)
+    # Find identical images
+    print("Finding duplicates...")
+    for filename in tqdm(os.listdir(images_filepath)):
+        if filename in deleted:
+            continue
+        img1 = cv2.imread(os.path.join(images_filepath, filename))
+        for filename2 in os.listdir(images_filepath):
+            if filename == filename2 or filename2 in deleted:
+                continue
+
+            img2 = cv2.imread(os.path.join(images_filepath, filename2))
+            if (
+                img1.shape == img2.shape
+                and np.bitwise_xor(img1, img2).sum() < 5
+            ):
+                duplicates_dict[filename2] = filename
+                deleted.add(filename2)
+                os.remove(os.path.join(images_filepath, filename2))
+
+        if filename not in duplicates_dict.keys():
+            duplicates_dict[filename] = filename
+
+    return duplicates_dict
+
+
+def process_images(images_filepath):
+    for filename in os.listdir(images_filepath):
+        image_path = os.path.join(images_filepath, filename)
+        img_raw = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+        # Crop out the bottom of the image
+        img_raw = img_raw[0 : img_raw.shape[0] - 50, 0 : img_raw.shape[1]]
+        cv2.imwrite(os.path.join(images_filepath, filename), img_raw)
+    duplicates_dict = find_duplicates(images_filepath)
+    return duplicates_dict
+
+
+################################################################ MAIN PROGRAM #################################################################
 def prepare_image_data():
     """Prepared image data."""
     ####### Preparation before changing the folder structure #################################
@@ -132,13 +178,28 @@ def prepare_image_data():
         for name in os.listdir(final_dist_root_path)
         if os.path.isdir(os.path.join(final_dist_root_path, name))
     ]
-    # Remove slideshow data: UNNECESSARY FOR Mask-RCNN
+    slides_dir = os.path.join(final_dist_root_path, "slides")
+    os.mkdir(slides_dir)
+    # Move all slides to the newly created "prepared_data/slides" directory
     for data_path in lecture_names:
-        shutil.rmtree(
-            os.path.join(
-                os.path.join(final_dist_root_path, data_path), "slideshow"
+        lecture_slides_path = os.path.join(final_dist_root_path, data_path)
+        move_src_path = os.path.join(lecture_slides_path, "slideshow")
+        files_to_copy = [
+            name
+            for name in os.listdir(move_src_path)
+            if os.path.isfile(os.path.join(move_src_path, name))
+        ]
+        for file in files_to_copy:
+            shutil.move(
+                os.path.join(move_src_path, file),
+                os.path.join(slides_dir, f"{data_path}_{file}"),
             )
-        )
+        shutil.rmtree(move_src_path)
+
+    duplicates_dict = process_images(slides_dir)
+
+    with open(os.path.join(slides_dir, "duplicates.json"), "w") as fp:
+        json.dump(duplicates_dict, fp)
     # Move all files to the newly created "prepared_data" directory
     for data_path in lecture_names:
         move_dist_path = os.path.join(final_dist_root_path, data_path)

@@ -94,7 +94,7 @@ class SlideConfig(Config):
     DETECTION_MIN_CONFIDENCE = 0.9
 
     # Number of epochs to train on
-    EPOCHS = 1
+    EPOCHS = 100
 
 
 class InferenceConfig(SlideConfig):
