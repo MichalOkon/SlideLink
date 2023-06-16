@@ -97,8 +97,10 @@ def analyze_matches(matched_images, duplicates_dict):
             continue
         matched += 1
         crop_filename = os.path.basename(crop_filepath)
-        slide_filename = slide_filepath.split(sep="\\")[-1]
-        if duplicates_dict[crop_filename] == duplicates_dict[slide_filename]:
+        slide_filename = os.path.basename(crop_filepath)
+        if duplicates_dict.get(crop_filename) == duplicates_dict.get(
+            slide_filename
+        ):
             print("Matched!")
             matched_correctly += 1
         print_match(crop_filepath, slide_filepath)

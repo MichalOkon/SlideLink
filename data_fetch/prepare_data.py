@@ -260,7 +260,7 @@ def prepare_image_data():
     ]
 
     # Divide up the images
-    test_data_lecture = random.Random(0).choice(lecture_names)
+    test_data_lecture = random.Random(1).choice(lecture_names)
     train_data, test_data = train_test_split_by_name(
         labels_list, test_data_lecture
     )

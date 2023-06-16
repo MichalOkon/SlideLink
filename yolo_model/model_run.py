@@ -101,12 +101,26 @@ def detect(model_path):
     shutil.copytree(data_dir, IMAGE_NON_CROPS_DIR, dirs_exist_ok=True)
 
 
+def test(model_path):
+    model = YOLO(model_path)
+    metrics = model.val()
+    precision, recall, mAP50, mAP50_95 = metrics.mean_results()
+    print("box recall: ", metrics.box.r)
+    print("box precision: ", metrics.box.p)
+    print("map: ", metrics.box.map)
+    print("map50: ", metrics.box.map50)  # map50
+    print("map75: ", metrics.box.map75)  # map75
+
+
 if __name__ == "__main__":
     # train_model()
     # path = os.path.abspath(os.getcwd())
     # print(path)
-    detect(
-        "/home/kbaran/git/git-uni/SlideLink/yolo_model/saved_models/yolo_2023-06-15_23_02_47.597993.pt"
+    # detect(
+    #     "/home/kbaran/git/git-uni/SlideLink/yolo_model/saved_models/yolo_2023-06-15_23_02_47.597993.pt"
+    # )
+    test(
+        "/home/kbaran/git/git-uni/SlideLink/yolo_model/saved_models/yolo_2023-06-16_22_20_56.831368.pt"
     )
 # Print out system filepath
 # print("System filepath: ", os.path.abspath(os.getcwd()))
