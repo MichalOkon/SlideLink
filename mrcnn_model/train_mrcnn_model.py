@@ -374,6 +374,8 @@ def crop_predictions(model, input_dir, output_dir):
     ]
     for image_file in tqdm(image_files):
         img_cvt = imread(os.path.join(input_dir, image_file))
+        if img_cvt.shape[-1] == 4:
+            img_cvt = img_cvt[..., :3]
         results = model.detect([img_cvt])
         if len(results) == 0 or len(results[0]["rois"]) == 0:
             continue
@@ -384,7 +386,7 @@ def crop_predictions(model, input_dir, output_dir):
         x, y, width, height = big_box
         crop_img = img_cvt[x:width, y:height]
 
-        image_save_path = os.path.join(output_dir, f"pred_{image_file}")
+        image_save_path = os.path.join(output_dir, image_file)
         cv2.imwrite(image_save_path, cv2.cvtColor(crop_img, cv2.COLOR_RGB2BGR))
 
 
@@ -563,11 +565,14 @@ if __name__ == "__main__":
     elif args.command == "detect":
         visualize_detection(model, image_path=args.image)
     elif args.command == "predict":
-        new_path = os.path.dirname(os.path.abspath(__file__))
-        new_path = os.path.join(new_path, "test-predictions")
-        if not os.path.exists(new_path):
-            os.makedirs(new_path)
-        crop_predictions(model, args.test_images, new_path)
+        dir_path = os.path.dirname(ROOT_DIR)
+        test_data_path = os.path.join(
+            dir_path, "data_fetch", "prepared_data", "maskrcnn_data", "test"
+        )
+        save_path = os.path.join(dir_path, "image_crops", "maskrcnn_crops")
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+        crop_predictions(model, test_data_path, save_path)
     elif args.command == "evaluate":
         test_set = SlideDataset()
         print(args.dataset)

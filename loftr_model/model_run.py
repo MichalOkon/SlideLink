@@ -2,6 +2,7 @@ import os
 import sys
 import cv2
 import torch
+import json
 import shutil
 import numpy as np
 from pathlib import Path
@@ -18,35 +19,33 @@ def compute_matching_score(mkpts0):
     return len(mkpts0)
 
 
-def match_slides():
+def match_slides(slides_dir, crops_dir, is_weight_outdoor=True):
     matcher = LoFTR(config=default_cfg)
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
+    outin_dir = "outdoor" if is_weight_outdoor else "indoor"
     weights_path = os.path.join(
-        script_dir, "weights_loftr", "loftr_outdoor.ckpt"
+        script_dir, "weights_loftr", f"loftr_{outin_dir}.ckpt"
     )
     matcher.load_state_dict(torch.load(weights_path)["state_dict"])
     matcher = matcher.eval().cuda()
 
-    slides_dir = os.path.join(script_dir, "matching_datasets", "trimmed_images")
     slides_filepaths = []
     # Add filepaths of the slides
     for filename in os.listdir(slides_dir):
-        slides_filepaths.append(os.path.join(slides_dir, filename))
+        if "png" in filename:
+            slides_filepaths.append(os.path.join(slides_dir, filename))
 
-    crops_dir = os.path.join(script_dir, "matching_datasets", "recordings")
     crops_filepaths = []
     # Add filepaths of the crops
     for filename in os.listdir(crops_dir):
-        crops_filepaths.append(os.path.join(crops_dir, filename))
+        if "png" in filename:
+            crops_filepaths.append(os.path.join(crops_dir, filename))
 
     matched_images = {}
     # Loop over all target images
     for crop_filepath in crops_filepaths:
         # Break if the filename is longer than 8 characters (incorrectly cropped slides)
-        print(crop_filepath.split(sep="\\")[-1])
-        if len(crop_filepath.split(sep="\\")[-1]) > 8:
-            continue
 
         img0_raw = cv2.imread(crop_filepath, cv2.IMREAD_GRAYSCALE)
         img0_raw = cv2.resize(img0_raw, (640, 320))
@@ -93,7 +92,6 @@ def analyze_matches(matched_images, duplicates_dict):
         print("Slide: ", slide_filepath)
         print("----------------------------------------------------")
 
-    print(path)
     matched_correctly = 0
     matched = 0
     for crop_filepath, slide_filepath in matched_images.items():
@@ -101,8 +99,8 @@ def analyze_matches(matched_images, duplicates_dict):
             print_match(crop_filepath, slide_filepath)
             continue
         matched += 1
-        crop_filename = crop_filepath.split(sep="\\")[-1][:4]
-        slide_filename = slide_filepath.split(sep="\\")[-1][:4]
+        crop_filename = os.path.basename(crop_filepath)
+        slide_filename = slide_filepath.split(sep="\\")[-1]
         if duplicates_dict[crop_filename] == duplicates_dict[slide_filename]:
             print("Matched!")
             matched_correctly += 1
@@ -124,60 +122,6 @@ def analyze_matches(matched_images, duplicates_dict):
     return accuracy
 
 
-def process_images(images_filepath):
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    trimmed_dir = "matching_datasets\\trimmed_images"
-    trimmed_path = os.path.join(script_dir, trimmed_dir)
-    print(trimmed_path)
-    if not os.path.exists(trimmed_path):
-        print("Create")
-        os.mkdir(trimmed_path)
-
-    for filename in os.listdir(images_filepath):
-        image_path = os.path.join(images_filepath, filename)
-        print(image_path)
-        img_raw = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-        # Crop out the bottom of the image
-        img_raw = img_raw[0 : img_raw.shape[0] - 50, 0 : img_raw.shape[1]]
-        cv2.imwrite(os.path.join(trimmed_path, filename), img_raw)
-
-    def find_duplicates(images_filepath):
-        duplicates_dict = {}
-        deleted = set()
-
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        images_filepath = os.path.join(script_dir, images_filepath)
-        print(images_filepath)
-        # Find identical images
-        for filename in os.listdir(images_filepath):
-            if filename in deleted:
-                continue
-            print(os.path.join(images_filepath, filename))
-            img1 = cv2.imread(os.path.join(images_filepath, filename))
-            print(img1.shape)
-            for filename2 in os.listdir(images_filepath):
-                if filename == filename2 or filename2 in deleted:
-                    continue
-
-                img2 = cv2.imread(os.path.join(images_filepath, filename2))
-                if (
-                    img1.shape == img2.shape
-                    and np.bitwise_xor(img1, img2).sum() < 5
-                ):
-                    print("Identical images: ", filename, filename2)
-                    duplicates_dict[filename2[:4]] = filename[:4]
-                    deleted.add(filename2)
-                    os.remove(os.path.join(images_filepath, filename2))
-
-            if filename not in duplicates_dict.keys():
-                duplicates_dict[filename[:4]] = filename[:4]
-
-        return duplicates_dict
-
-    duplicates_dict = find_duplicates(trimmed_path)
-    return duplicates_dict
-
-
 if __name__ == "__main__":
     # train_model()
     # path = os.path.abspath(os.getcwd())
@@ -185,7 +129,21 @@ if __name__ == "__main__":
     # detect("../runs/detect/train4/weights/best.pt", "test_dataset")
     # Print out system filepath
     # print("System filepath: ", os.path.abspath(os.getcwd()))
-    duplicates = process_images("matching_datasets/slides")
-    print("Duplicates: ", duplicates)
-    matched_images = match_slides()
+    # duplicates = process_images("matching_datasets/slides")
+    # print("Duplicates: ", duplicates)
+    root_dir_project = os.path.dirname(
+        os.path.dirname(os.path.abspath(__file__))
+    )
+    slides_dir = os.path.join(
+        root_dir_project, "data_fetch", "prepared_data", "slides"
+    )
+    slides_duplicates_file = os.path.join(
+        slides_dir,
+        "duplicates.json",
+    )
+    crops_dir = os.path.join(root_dir_project, "image_crops", "non_crops")
+
+    with open(slides_duplicates_file) as f:
+        duplicates = json.load(f)
+    matched_images = match_slides(slides_dir, crops_dir, is_weight_outdoor=True)
     analyze_matches(matched_images, duplicates)

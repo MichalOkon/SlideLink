@@ -3,14 +3,18 @@ import os
 from enum import Enum
 from typer import Typer, Argument, Option, BadParameter
 from typing_extensions import Annotated
-from yolo_model.model_run import train_model, create_local_yolo_settings
+from yolo_model.model_run import train_model, create_local_yolo_settings, detect
 from data_fetch.prepare_data import prepare_image_data
 from mrcnn_model.train_mrcnn_model import (
     DEFAULT_LOGS_DIR,
+    SAVED_MODELS,
     DATASET,
+    SAVED_MODELS,
     SlideConfig,
     get_weights_path,
     train as train_mrcnn,
+    InferenceConfig,
+    crop_predictions,
 )
 from mrcnn_model.mrcnn.model import MaskRCNN
 
@@ -66,6 +70,31 @@ def train_mask_rcnn(epochs: int, weights_name: str):
     train_mrcnn(model, epochs, dataset_path=DATASET, conf=config)
 
 
+def detect_mask_rcnn(model_path: str):
+    config = InferenceConfig()
+    model = MaskRCNN(
+        mode="inference", config=config, model_dir=os.path.dirname(SAVED_MODELS)
+    )
+    model.load_weights(
+        model_path,
+        by_name=True,
+        exclude=[
+            "mrcnn_class_logits",
+            "mrcnn_bbox_fc",
+            "mrcnn_bbox",
+            "mrcnn_mask",
+        ],
+    )
+    dir_path = os.path.dirname(os.path.abspath(__file__))
+    test_data_path = os.path.join(
+        dir_path, "data_fetch", "prepared_data", "maskrcnn_data", "test"
+    )
+    save_path = os.path.join(dir_path, "image_crops", "maskrcnn_crops")
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+    crop_predictions(model, test_data_path, save_path)
+
+
 CLI = Typer()
 
 
@@ -114,6 +143,28 @@ def prepare_data():
     """Prepared image data before training models. Takes random lecture as test
     set and divides rest into train and validation set."""
     prepare_image_data()
+
+
+@CLI.command()
+def detect_crop(
+    model_name: Annotated[
+        TrainNetworkType,
+        Argument(
+            help="The name of the model to make predictions.",
+        ),
+    ],
+    model_path: Annotated[
+        str, Option(help="Path to the trained model file.")
+    ] = "",
+):
+    """Detect areas and crop."""
+    match model_name:
+        case TrainNetworkType.YOLO:
+            detect(model_path)
+        case TrainNetworkType.MASK_RCNN:
+            detect_mask_rcnn(model_path)
+        case TrainNetworkType.ALL:
+            raise BadParameter("Not implemented.")
 
 
 if __name__ == "__main__":

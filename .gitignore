@@ -172,3 +172,4 @@ runs/
 *.pt
 data.yaml
 test-predictions/
+*.jpg
