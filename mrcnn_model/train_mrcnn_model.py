@@ -18,7 +18,7 @@ Usage: import the module (see Jupyter notebooks for examples), or run from
     python3 train_mrcnn_model.py train --dataset=/path/to/model/dataset --weights=last
 
     # Train a new model starting from ImageNet weights
-    python3 train_mrcnn_model.py train --dataset=/path/to/model/dataset --weights=imagenet
+    python train_mrcnn_model.py train --dataset=/path/to/model/dataset --weights=imagenet
 
     # Apply color splash to an image
     python3 train_mrcnn_model.py splash --weights=/path/to/weights/file.h5 --image=<URL or path to file>
@@ -45,7 +45,9 @@ from wandb.keras import WandbMetricsLogger, WandbModelCheckpoint
 # https://github.com/matterport/Mask_RCNN/blob/master/samples/balloon/balloon.py
 
 # Root directory of the project
-ROOT_DIR = os.path.abspath("../")
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+SAVED_MODELS = os.path.join(ROOT_DIR, "saved_models")
 
 # Import Mask RCNN
 sys.path.append(ROOT_DIR)  # To find local version of the library
@@ -62,6 +64,9 @@ COCO_WEIGHTS_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
 DEFAULT_LOGS_DIR = os.path.join(ROOT_DIR, "logs")
 
 
+DATASET = os.path.join(
+    os.path.dirname(ROOT_DIR), "data_fetch", "prepared_data", "maskrcnn_data"
+)
 ############################################################
 #  Configurations
 ############################################################
@@ -90,6 +95,14 @@ class SlideConfig(Config):
 
     # Number of epochs to train on
     EPOCHS = 1
+
+
+class InferenceConfig(SlideConfig):
+    # Set batch size to 1 since we'll be running inference on
+    # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
+    GPU_COUNT = 1
+    IMAGES_PER_GPU = 1
+    USE_MINI_MASK = False
 
 
 ############################################################
@@ -206,16 +219,23 @@ class NumpyEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 
-def train(model, custom_callbacks=None, weights_name=""):
+def train(
+    model,
+    epochs,
+    dataset_path="",
+    conf=None,
+    custom_callbacks=None,
+    weights_name="",
+):
     """Train the model."""
     # Training dataset.
     dataset_train = SlideDataset()
-    dataset_train.load_slides(args.dataset, "train")
+    dataset_train.load_slides(dataset_path, "train")
     dataset_train.prepare()
 
     # Validation dataset
     dataset_val = SlideDataset()
-    dataset_val.load_slides(args.dataset, "val")
+    dataset_val.load_slides(dataset_path, "val")
     dataset_val.prepare()
 
     # ***  Update to your needs ***
@@ -226,21 +246,26 @@ def train(model, custom_callbacks=None, weights_name=""):
     model.train(
         dataset_train,
         dataset_val,
-        learning_rate=config.LEARNING_RATE,
-        epochs=config.EPOCHS,
+        learning_rate=conf.LEARNING_RATE,
+        epochs=epochs,
         layers="heads",
         custom_callbacks=custom_callbacks,
     )
 
+    time_stamp = (
+        str(datetime.datetime.now()).replace(":", "_").replace(" ", "_")
+    )
     model_save_path = os.path.join(
-        ROOT_DIR, f"slides_{weights_name}_mask_rcnn.h5"
+        SAVED_MODELS, f"slides_{weights_name}_mask_rcnn_{time_stamp}.h5"
     )
     model.keras_model.save_weights(model_save_path)
-
     with open(
-        os.path.join(ROOT_DIR, f"slides_{weights_name}_mask_rcnn.json"), "w"
+        os.path.join(
+            SAVED_MODELS, f"slides_{weights_name}_mask_rcnn_{time_stamp}.json"
+        ),
+        "w",
     ) as outfile:
-        json.dump(config.display_dict(), outfile, cls=NumpyEncoder)
+        json.dump(conf.display_dict(), outfile, cls=NumpyEncoder)
 
 
 def color_splash(image, mask):
@@ -363,6 +388,28 @@ def crop_predictions(model, input_dir, output_dir):
         cv2.imwrite(image_save_path, cv2.cvtColor(crop_img, cv2.COLOR_RGB2BGR))
 
 
+def get_weights_path(weights_name: str, model):
+    """Select weights file to load.
+
+    Args:
+        weights_name (str): _description_
+
+    Returns:
+        str: _description_
+    """
+    if weights_name == "coco":
+        weights_path = COCO_WEIGHTS_PATH
+        # Download weights file
+        if not os.path.exists(weights_path):
+            utils.download_trained_weights(weights_path)
+    elif weights_name == "imagenet":
+        # Start from ImageNet trained weights
+        weights_path = model.get_imagenet_weights()
+    else:
+        weights_path = None
+    return weights_path
+
+
 ############################################################
 #  Training
 ############################################################
@@ -443,14 +490,6 @@ if __name__ == "__main__":
     if args.command == "train":
         config = SlideConfig()
     else:
-
-        class InferenceConfig(SlideConfig):
-            # Set batch size to 1 since we'll be running inference on
-            # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
-            GPU_COUNT = 1
-            IMAGES_PER_GPU = 1
-            USE_MINI_MASK = False
-
         config = InferenceConfig()
     config.display()
 
@@ -511,6 +550,9 @@ if __name__ == "__main__":
     if args.command == "train":
         train(
             model,
+            100,
+            dataset_path=args.dataset,
+            conf=config,
             custom_callbacks=custom_callbacks,
             weights_name=args.weights.lower(),
         )

@@ -171,3 +171,4 @@ wandb/
 runs/
 *.pt
 data.yaml
+test-predictions/
