@@ -3,7 +3,12 @@ import os
 from enum import Enum
 from typer import Typer, Argument, Option, BadParameter
 from typing_extensions import Annotated
-from yolo_model.model_run import train_model, create_local_yolo_settings, detect
+from yolo_model.model_run import (
+    train_model,
+    create_local_yolo_settings,
+    detect,
+    test,
+)
 from data_fetch.prepare_data import prepare_image_data
 from mrcnn_model.train_mrcnn_model import (
     DEFAULT_LOGS_DIR,
@@ -17,12 +22,19 @@ from mrcnn_model.train_mrcnn_model import (
     crop_predictions,
 )
 from mrcnn_model.mrcnn.model import MaskRCNN
+from rich import print as rprint
+from rich.console import Console
 
 
 class TrainNetworkType(str, Enum):
     YOLO = "yolo"
     MASK_RCNN = "maskrcnn"
     ALL = "all"
+
+
+class InferenceNetworkType(str, Enum):
+    YOLO = "yolo"
+    MASK_RCNN = "maskrcnn"
 
 
 class MaskRCNNWeights(str, Enum):
@@ -96,6 +108,7 @@ def detect_mask_rcnn(model_path: str):
 
 
 CLI = Typer()
+CONSOLE = Console()
 
 
 @CLI.command()
@@ -114,43 +127,76 @@ def train(
     ] = MaskRCNNWeights.NONE,
 ):
     """Trains a specified model."""
-    if model_name == TrainNetworkType.YOLO:
+    weights_str = (
+        f", weights={weights.value}"
+        if weights is not MaskRCNNWeights.NONE
+        else ""
+    )
+    rprint(
+        f"Traing [bold green]{model_name.value.upper()}[/bold green] model (epochs={epochs}{weights_str}) :boom:"
+    )
+    if model_name is TrainNetworkType.YOLO:
         if weights is not MaskRCNNWeights.NONE:
             raise BadParameter("Weights only for MASK RCNN.")
         train_yolo(epochs)
-    if model_name == TrainNetworkType.MASK_RCNN:
+    elif model_name is TrainNetworkType.MASK_RCNN:
         if weights is MaskRCNNWeights.NONE:
-            raise BadParameter("Weights must be loaded for MASK RCNN.")
+            raise BadParameter(
+                "MASK RCNN weights can only be applied to MASK RCNN."
+            )
         train_mask_rcnn(epochs, weights)
-    if model_name == TrainNetworkType.ALL:
+    elif model_name is TrainNetworkType.ALL:
         for pre_weight in ["imagenet", "coco"]:
             train_mask_rcnn(epochs, pre_weight)
         train_yolo(epochs)
-
+    else:
+        raise BadParameter("You can only train YOLO or MASK RCNN or both.")
 
 
 @CLI.command()
-def evaluate(model_name: str, model_path: str = "", verbose: bool = False):
+def evaluate(
+    model_name: Annotated[
+        InferenceNetworkType,
+        Argument(
+            help="The name of the model to make inference on.",
+        ),
+    ],
+    model_path: Annotated[
+        str, Option(help="Path to the trained model file.")
+    ] = "",
+):
     """Evaluates a model on the test set with mAP and F1 scores."""
-    from_text = f" (from {model_path})" if model_path else ""
-    print(f"Picked {model_name}{from_text}. Have a good day.")
-    if verbose:
-        print("Verbose: ON")
+    if model_name is InferenceNetworkType.YOLO:
+        test(model_path)
+    elif model_name is InferenceNetworkType.MASK_RCNN:
+        raise BadParameter("Not implemented yet.")
+    else:
+        raise BadParameter("Only YOLO and MASK RCNN models are supported.")
 
 
 @CLI.command()
 def prepare_data():
-    """Prepared image data before training models. Takes random lecture as test
-    set and divides rest into train and validation set."""
+    """Prepares the data in the `data_fetch/prepared_data` folder.
+    This will take the `data_fetch/screenshots` folder and prepare
+    it for the `data_fetch/prepared_data` folder.
+    This will also prepare the `data_fetch/prepared_data/maskrcnn_data`
+    (data prepared for MASK R-CNN training and inference),
+    `data_fetch/prepared_data/yolo_data` (data prepared for YOLOv8
+    training and inference) and `data_fetch/prepared_data/slides/ (slides
+    prepared for matching slides with LoFTR)
+
+    Data folders for YOLOv8 and MASK-R-CNN each contain train, val
+    and test folders. Slides contain test slides which will be used
+    for matching slides on already trained LoFTR model."""
     prepare_image_data()
 
 
 @CLI.command()
 def detect_crop(
     model_name: Annotated[
-        TrainNetworkType,
+        InferenceNetworkType,
         Argument(
-            help="The name of the model to make predictions.",
+            help="The name of the model to make inference on.",
         ),
     ],
     model_path: Annotated[
@@ -158,12 +204,12 @@ def detect_crop(
     ] = "",
 ):
     """Detect areas and crop."""
-    if model_name == TrainNetworkType.YOLO:
+    if model_name is InferenceNetworkType.YOLO:
         detect(model_path)
-    if model_name == TrainNetworkType.MASK_RCNN:
+    elif model_name is InferenceNetworkType.MASK_RCNN:
         detect_mask_rcnn(model_path)
-    if model_name == TrainNetworkType.ALL:
-        raise BadParameter("Not implemented.")
+    else:
+        raise BadParameter("Only YOLO and MASK RCNN models are supported.")
 
 
 if __name__ == "__main__":

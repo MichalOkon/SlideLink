@@ -18,6 +18,7 @@ torch
 numpy
 matplotlib
 tensorflow_io
+rich
 
 albumentations==0.5.1 --no-binary=imgaug,albumentations
 ray>=1.0.1

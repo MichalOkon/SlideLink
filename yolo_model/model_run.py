@@ -2,7 +2,8 @@ import os
 import yaml
 import torch
 import shutil
-import numpy as np
+from rich.console import Console
+from rich.table import Table
 from datetime import datetime
 from ultralytics import YOLO
 
@@ -18,6 +19,7 @@ IMAGE_CROPS_DIR = os.path.join(
 IMAGE_NON_CROPS_DIR = os.path.join(
     os.path.dirname(CURRENT_DIR), "image_crops", "non_crops"
 )
+YOLO_MODEL_PATH = os.path.join(SAVED_MODELS_DIR, "yolov8n.pt")
 
 
 def train_model(save_model_dir: str = SAVED_MODELS_DIR, epochs: int = 100):
@@ -27,7 +29,7 @@ def train_model(save_model_dir: str = SAVED_MODELS_DIR, epochs: int = 100):
         save_model_dir (str, optional): folder to save the trained model to. Defaults to CURRENT_DIR.
         epochs (int, optional): Number of epochs to run. Defaults to 100.
     """
-    model = YOLO(os.path.join(CURRENT_DIR, "yolov8n.pt"))
+    model = YOLO(YOLO_MODEL_PATH)
     torch.cuda.empty_cache()
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     print(torch.cuda.is_available())
@@ -103,25 +105,33 @@ def detect(model_path):
 
 def test(model_path):
     model = YOLO(model_path)
-    metrics = model.val()
-    precision, recall, mAP50, mAP50_95 = metrics.mean_results()
-    print("box recall: ", metrics.box.r)
-    print("box precision: ", metrics.box.p)
-    print("map: ", metrics.box.map)
-    print("map50: ", metrics.box.map50)  # map50
-    print("map75: ", metrics.box.map75)  # map75
+    metrics = model.val(data=DATA_INFO_PATH)
+    precision, recall, mAP50, mAP95 = metrics.mean_results()
+    table = Table(title="YOLO Results")
+    table.add_column("Path", style="cyan", no_wrap=True)
+    table.add_column("Class precision")
+    table.add_column("Class Recall")
+    table.add_column("mAP@50")
+    table.add_column("mAP@95")
+    table.add_row(
+        model_path,
+        f"{precision:.3f}",
+        f"{recall:.3f}",
+        f"{mAP50:.3f}",
+        f"{mAP95:.3f}",
+    )
+    console = Console()
+    console.print(table)
 
 
 if __name__ == "__main__":
-    # train_model()
+    train_model()
     # path = os.path.abspath(os.getcwd())
     # print(path)
     # detect(
     #     "/home/kbaran/git/git-uni/SlideLink/yolo_model/saved_models/yolo_2023-06-15_23_02_47.597993.pt"
     # )
-    test(
-        "/home/kbaran/git/git-uni/SlideLink/yolo_model/saved_models/yolo_2023-06-16_22_20_56.831368.pt"
-    )
+    # test("/home/kbaran/git/git-uni/SlideLink/yolo_model/saved_models/best.pt")
 # Print out system filepath
 # print("System filepath: ", os.path.abspath(os.getcwd()))
 # duplicates = process_images("matching_datasets/slides")
