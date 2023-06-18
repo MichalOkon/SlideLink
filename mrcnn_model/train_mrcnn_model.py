@@ -36,6 +36,7 @@ import argparse
 import datetime
 import numpy as np
 import skimage.draw
+from typing import Union
 from tqdm import tqdm
 from skimage.io import imread, imsave
 from skimage.color import gray2rgb, rgb2gray
@@ -139,7 +140,8 @@ class SlideDataset(utils.Dataset):
         # }
         # We mostly care about the x and y coordinates of each region
         # Note: In VIA 2.0, regions was changed from a dict to a list.
-        annotations = json.load(open(os.path.join(dataset_dir, "labels.json")))
+        with open(os.path.join(dataset_dir, "labels.json")) as f:
+            annotations = json.load(f)
         annotations = list(annotations.values())  # don't need the dict keys
 
         # The VIA tool saves images in the JSON even if they don't have any
@@ -222,8 +224,8 @@ class NumpyEncoder(json.JSONEncoder):
 def train(
     model,
     epochs,
+    conf: Config,
     dataset_path="",
-    conf=None,
     custom_callbacks=None,
     weights_name="",
 ):
@@ -399,17 +401,53 @@ def get_weights_path(weights_name: str, model):
     Returns:
         str: _description_
     """
-    if weights_name == "coco":
+    # Select weights file to load
+    if weights_name.lower() == "coco":
         weights_path = COCO_WEIGHTS_PATH
         # Download weights file
         if not os.path.exists(weights_path):
             utils.download_trained_weights(weights_path)
-    elif weights_name == "imagenet":
+    elif weights_name.lower() == "last":
+        # Find last trained weights
+        weights_path = model.find_last()
+    elif weights_name.lower() == "imagenet":
         # Start from ImageNet trained weights
         weights_path = model.get_imagenet_weights()
     else:
-        weights_path = None
+        weights_path = weights_name
     return weights_path
+
+
+def train_mask_rcnn(epochs: int, weights_name: str):
+    """Trains the MASK RNN model.
+
+    Args:
+        epochs (int): number of epochs to train on.
+        weights_name (str): weights to train on.
+    """
+    config = SlideConfig()
+    config.display()
+    model_log_path = os.path.join(DEFAULT_LOGS_DIR, weights_name)
+    if not os.path.exists(DEFAULT_LOGS_DIR):
+        os.mkdir(DEFAULT_LOGS_DIR)
+    if not os.path.exists(model_log_path):
+        os.mkdir(model_log_path)
+    model = modellib.MaskRCNN(
+        mode="training", config=config, model_dir=model_log_path
+    )
+    weights_path = get_weights_path(weights_name, model)
+
+    model.load_weights(
+        weights_path,
+        by_name=True,
+        exclude=[
+            "mrcnn_class_logits",
+            "mrcnn_bbox_fc",
+            "mrcnn_bbox",
+            "mrcnn_mask",
+        ],
+    )
+    train(model, epochs, config, dataset_path=DATASET)
 
 
 ############################################################
@@ -553,8 +591,8 @@ if __name__ == "__main__":
         train(
             model,
             100,
+            config,
             dataset_path=args.dataset,
-            conf=config,
             custom_callbacks=custom_callbacks,
             weights_name=args.weights.lower(),
         )

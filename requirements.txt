@@ -4,7 +4,7 @@ pylint
 black
 scikit-image
 opencv-python
-tensorflow
+tensorflow==2.10
 keras
 Pillow
 cython

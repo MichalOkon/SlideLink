@@ -173,3 +173,4 @@ runs/
 data.yaml
 test-predictions/
 *.jpg
+mrcnn_model/saved_models/*.json

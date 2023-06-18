@@ -11,13 +11,9 @@ from yolo_model.model_run import (
 )
 from data_fetch.prepare_data import prepare_image_data
 from mrcnn_model.train_mrcnn_model import (
-    DEFAULT_LOGS_DIR,
     SAVED_MODELS,
-    DATASET,
     SAVED_MODELS,
-    SlideConfig,
-    get_weights_path,
-    train as train_mrcnn,
+    train_mask_rcnn,
     InferenceConfig,
     crop_predictions,
 )
@@ -51,35 +47,6 @@ def train_yolo(epochs: int):
     """
     create_local_yolo_settings()
     train_model(epochs=epochs)
-
-
-def train_mask_rcnn(epochs: int, weights_name: str):
-    """Trains the MASK RNN model.
-
-    Args:
-        epochs (int): number of epochs to train on.
-        weights_name (str): weights to train on.
-    """
-    config = SlideConfig()
-    model_log_path = os.path.join(DEFAULT_LOGS_DIR, weights_name)
-    if not os.path.exists(DEFAULT_LOGS_DIR):
-        os.mkdir(DEFAULT_LOGS_DIR)
-    if not os.path.exists(model_log_path):
-        os.mkdir(model_log_path)
-    model = MaskRCNN(mode="training", config=config, model_dir=model_log_path)
-    weights_path = get_weights_path(weights_name, model)
-
-    model.load_weights(
-        weights_path,
-        by_name=True,
-        exclude=[
-            "mrcnn_class_logits",
-            "mrcnn_bbox_fc",
-            "mrcnn_bbox",
-            "mrcnn_mask",
-        ],
-    )
-    train_mrcnn(model, epochs, dataset_path=DATASET, conf=config)
 
 
 def detect_mask_rcnn(model_path: str):
@@ -142,7 +109,7 @@ def train(
     elif model_name is TrainNetworkType.MASK_RCNN:
         if weights is MaskRCNNWeights.NONE:
             raise BadParameter(
-                "MASK RCNN weights can only be applied to MASK RCNN."
+                "MASK RCNN weights {coco|imagenet} MUST be applied to MASK RCNN."
             )
         train_mask_rcnn(epochs, weights)
     elif model_name is TrainNetworkType.ALL:
