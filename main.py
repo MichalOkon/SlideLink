@@ -135,7 +135,7 @@ def evaluate(
         str, Option(help="Path to the trained model file.")
     ] = "",
 ):
-    """Evaluates a model on the test set with mAP and F1 scores."""
+    """Evaluates a model on the test set."""
     if model_name is InferenceNetworkType.YOLO:
         test_yolo(model_path)
     elif model_name is InferenceNetworkType.MASK_RCNN:
