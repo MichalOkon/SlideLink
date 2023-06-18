@@ -10,11 +10,20 @@ from selenium.common.exceptions import TimeoutException
 class Scraper:
     """Scraper class"""
 
-    def __init__(self, link: str, browser: Browser):
+    def __init__(
+        self,
+        link: str,
+        slides_view_index: int,
+        presenter_viewer_index: int,
+        browser: Browser,
+    ):
         """Initialise scraper object.
 
         Args:
             link (str): resource to scrape from
+            slides_view_index (int): Collegerama XPath index for slides view
+            presenter_viewer_index (int): Collegerama XPath index for presenter view
+            browser (Browser): browser object
         """
         self.browser = browser
         self.total_time = 0
@@ -23,6 +32,8 @@ class Scraper:
         self.presenter_count = 0
         self.curr_timestamp = 0
         self.link = link
+        self.slides_view_index = slides_view_index
+        self.presenter_viewer_index = presenter_viewer_index
         self.lecture_name = link.split("/")[-1]
 
     def login_action(self, username: str, password: str) -> None:
@@ -87,14 +98,28 @@ class Scraper:
         string_curr_time = None
         string_total_time = None
         if wait:
-            string_curr_time = self.browser._wait_until_click(By.CSS_SELECTOR, value=".vjs-current-time-display")
-            string_curr_time = string_curr_time.text if string_curr_time is not None else None
-            string_total_time = self.browser._wait_until_click(By.CSS_SELECTOR, value=".vjs-duration-display")
-            string_total_time = string_total_time.text if string_total_time is not None else None
+            string_curr_time = self.browser._wait_until_click(
+                By.CSS_SELECTOR, value=".vjs-current-time-display"
+            )
+            string_curr_time = (
+                string_curr_time.text if string_curr_time is not None else None
+            )
+            string_total_time = self.browser._wait_until_click(
+                By.CSS_SELECTOR, value=".vjs-duration-display"
+            )
+            string_total_time = (
+                string_total_time.text
+                if string_total_time is not None
+                else None
+            )
         if string_curr_time is None:
-            string_curr_time = self.browser.find_element(By.CSS_SELECTOR, value=".vjs-current-time-display").text
+            string_curr_time = self.browser.find_element(
+                By.CSS_SELECTOR, value=".vjs-current-time-display"
+            ).text
         if string_total_time is None:
-            string_total_time = self.browser.find_element(By.CSS_SELECTOR, value=".vjs-duration-display").text
+            string_total_time = self.browser.find_element(
+                By.CSS_SELECTOR, value=".vjs-duration-display"
+            ).text
 
         times = [string_curr_time, string_total_time]
         times_s = [0 for _ in range(2)]
@@ -105,7 +130,9 @@ class Scraper:
 
             # Turn strings into integers
             if len(video_time_strs) == 3:
-                times_s[i] = 60 * int(video_time_strs[0]) + int(video_time_strs[1])
+                times_s[i] = 60 * int(video_time_strs[0]) + int(
+                    video_time_strs[1]
+                )
             else:
                 times_s[i] = int(video_time_strs[0])
 
@@ -128,29 +155,31 @@ class Scraper:
         self.browser.sleep(5, 7)
 
         # Turn on the fullscreen
-        self.browser.click_button(By.CSS_SELECTOR, ".btn-bigger.link.channel-button")
+        self.browser.click_button(
+            By.CSS_SELECTOR, ".btn-bigger.link.channel-button"
+        )
         self.browser.sleep(0.5, 1.5)
 
-        self.browser.click_button(By.XPATH, '//*[@id="InAppPlayerContainer"]/div[2]/div[1]')
+        self.browser.click_button(
+            By.XPATH, '//*[@id="InAppPlayerContainer"]/div[2]/div[1]'
+        )
         self.browser.sleep(0.5, 1.5)
 
         # Enter the media player
         self.browser.iframe_switch("player-iframe")
         self.browser.sleep(0.5, 1.5)
 
-        self.browser.click_execute(By.XPATH, '//*[@id="vjs_video_3"]/div[4]/button[1]')
+        self.browser.click_execute(
+            By.XPATH, '//*[@id="vjs_video_3"]/div[4]/button[1]'
+        )
         self.browser.sleep(0.5, 1.5)
 
-        children = self.browser.get_children(By.XPATH, '//*[@id="vjs_video_3"]/div[7]/div[10]/div[1]')
-        children = children if children is not None else []
-        if len(children) == 2:
-            slide_show_path = '//*[@id="vjs_video_3"]/div[7]/div[10]/div[1]/div[1]'
-            presenter_path = '//*[@id="vjs_video_3"]/div[7]/div[10]/div[1]/div[2]'
-        else:
-            slide_show_path = '//*[@id="vjs_video_3"]/div[7]/div[10]/div[1]/div[2]'
-            presenter_path = '//*[@id="vjs_video_3"]/div[7]/div[10]/div[1]/div[3]'
+        slide_show_path = f'//*[@id="vjs_video_3"]/div[7]/div[10]/div[1]/div[{self.slides_view_index}]'
+        presenter_path = f'//*[@id="vjs_video_3"]/div[7]/div[10]/div[1]/div[{self.presenter_viewer_index}]'
         self.browser.sleep(0.5, 1.5)
-        self.browser.click_execute(By.XPATH, '//*[@id="vjs_video_3"]/div[4]/button[1]', wait=False)
+        self.browser.click_execute(
+            By.XPATH, '//*[@id="vjs_video_3"]/div[4]/button[1]', wait=False
+        )
         self.browser.sleep(3.5, 4)
 
         # Get total time of the video (in minutes)
@@ -163,7 +192,9 @@ class Scraper:
 
         print(f"Scraping video: {self.link}")
 
-        progress_bar = tqdm(desc="Progress: ", total=self.total_time, colour="red")
+        progress_bar = tqdm(
+            desc="Progress: ", total=self.total_time, colour="red"
+        )
         progress_bar.update(self.curr_time)
 
         while self.curr_time < self.total_time:
@@ -174,7 +205,11 @@ class Scraper:
                 self.take_screen_shot("slideshow", self.lecture_name)
                 self.browser.sleep(0.5, 2.5)
 
-                self.browser.click_execute(By.CLASS_NAME, "mediasite-player__smart-zoom-exit-button", wait=False)
+                self.browser.click_execute(
+                    By.CLASS_NAME,
+                    "mediasite-player__smart-zoom-exit-button",
+                    wait=False,
+                )
                 self.browser.sleep(0.5, 2.5)
 
                 self.browser.click_button(By.XPATH, presenter_path, wait=False)
@@ -183,7 +218,11 @@ class Scraper:
                 self.take_screen_shot("presenter", self.lecture_name)
                 self.browser.sleep(0.5, 2.5)
 
-                self.browser.click_execute(By.CLASS_NAME, "mediasite-player__smart-zoom-exit-button", wait=False)
+                self.browser.click_execute(
+                    By.CLASS_NAME,
+                    "mediasite-player__smart-zoom-exit-button",
+                    wait=False,
+                )
                 self.browser.sleep(0.5, 2.5)
 
                 self.move_next_timestamp(12)
