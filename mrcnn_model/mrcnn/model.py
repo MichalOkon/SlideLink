@@ -1521,7 +1521,7 @@ def load_image_gt(dataset, config, image_id, augmentation=None):
             mask.shape == mask_shape
         ), "Augmentation shouldn't change mask size"
         # Change mask back to bool
-        mask = mask.astype(np.bool)
+        mask = mask.astype(np.bool_)
 
     # Note that some boxes might be all zeros if the corresponding mask got cropped out.
     # and here is to filter them out
@@ -3449,11 +3449,14 @@ def evaluate_model(dataset: utils.Dataset, model: KM.Model, cfg: Config):
     Returns:
         Tuple[float, float, float]: mAP, mAR and f1 score tuple
     """
-    APs = list()
+    AP_50s = list()
+    AP_95s = list()
     ARs = list()
     for image_id in tqdm(dataset.image_ids):
         image, _, gt_class_id, gt_bbox, gt_mask = load_image_gt(
-            dataset, cfg, image_id, use_mini_mask=False
+            dataset,
+            cfg,
+            image_id,
         )
         scaled_image = mold_image(image, cfg)
         sample = [scaled_image]
@@ -3462,13 +3465,13 @@ def evaluate_model(dataset: utils.Dataset, model: KM.Model, cfg: Config):
 
         if len(yhat) == 0 or len(yhat[0]["rois"]) == 0:
             if len(gt_bbox) == 0:
-                AP, AR = 1.0, 1.0
+                AP_50, AP_95, AR = 1.0, 1.0, 1.0
             else:
-                AP, AR = 0.0, 0.0
+                AP_50, AP_95, AR = 0.0, 0.0, 0.0
         else:
             highest_score_index = np.argmax(r["scores"])
 
-            AP, _, _, _ = utils.compute_ap(
+            AP_50, _, _, _ = utils.compute_ap(
                 gt_bbox,
                 gt_class_id,
                 gt_mask,
@@ -3476,19 +3479,28 @@ def evaluate_model(dataset: utils.Dataset, model: KM.Model, cfg: Config):
                 np.expand_dims(r["class_ids"][highest_score_index], axis=0),
                 np.expand_dims(r["scores"][highest_score_index], axis=0),
                 np.expand_dims(r["masks"][:, :, highest_score_index], axis=-1),
+                iou_threshold=0.5,
+            )
+            AP_95, _, _, _ = utils.compute_ap(
+                gt_bbox,
+                gt_class_id,
+                gt_mask,
+                np.expand_dims(r["rois"][highest_score_index], axis=0),
+                np.expand_dims(r["class_ids"][highest_score_index], axis=0),
+                np.expand_dims(r["scores"][highest_score_index], axis=0),
+                np.expand_dims(r["masks"][:, :, highest_score_index], axis=-1),
+                iou_threshold=0.95,
             )
             AR, _ = utils.compute_recall(
                 np.expand_dims(r["rois"][highest_score_index], axis=0),
                 gt_bbox,
-                iou=0.2,
+                iou=0.9,
             )
-            ARs.append(AR)
-            APs.append(AP)
+        ARs.append(AR)
+        AP_50s.append(AP_50)
+        AP_95s.append(AP_95)
 
-    mAP = mean(APs)
+    mAP_50 = mean(AP_50s)
+    mAP_95 = mean(AP_95s)
     mAR = mean(ARs)
-    if mAP + mAR == 0.0:
-        f1_score = 0.0
-    else:
-        f1_score = (2 * mAP * mAR) / (mAR + mAR)
-    return mAP, mAR, f1_score
+    return mAP_50, mAP_95, mAR

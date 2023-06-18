@@ -33,11 +33,12 @@ import sys
 import json
 import wandb
 import argparse
-import datetime
 import numpy as np
 import skimage.draw
-from typing import Union
+from datetime import datetime
 from tqdm import tqdm
+from rich.console import Console
+from rich.table import Table
 from skimage.io import imread, imsave
 from skimage.color import gray2rgb, rgb2gray
 from wandb.keras import WandbMetricsLogger, WandbModelCheckpoint
@@ -47,7 +48,7 @@ from wandb.keras import WandbMetricsLogger, WandbModelCheckpoint
 
 # Root directory of the project
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
-
+PROJECT_ROOT = os.path.dirname(ROOT_DIR)
 SAVED_MODELS = os.path.join(ROOT_DIR, "saved_models")
 
 # Import Mask RCNN
@@ -105,6 +106,13 @@ class InferenceConfig(SlideConfig):
     IMAGES_PER_GPU = 1
     USE_MINI_MASK = False
 
+    TEST_DATA_PATH = os.path.join(
+        PROJECT_ROOT, "data_fetch", "prepared_data", "maskrcnn_data", "test"
+    )
+    SAVED_MODELS_PATH = os.path.join(
+        PROJECT_ROOT, "image_crops", "maskrcnn_crops"
+    )
+
 
 ############################################################
 #  Dataset
@@ -140,7 +148,7 @@ class SlideDataset(utils.Dataset):
         # }
         # We mostly care about the x and y coordinates of each region
         # Note: In VIA 2.0, regions was changed from a dict to a list.
-        with open(os.path.join(dataset_dir, "labels.json")) as f:
+        with open(os.path.join(dataset_dir, "labels.json"), "r") as f:
             annotations = json.load(f)
         annotations = list(annotations.values())  # don't need the dict keys
 
@@ -254,9 +262,7 @@ def train(
         custom_callbacks=custom_callbacks,
     )
 
-    time_stamp = (
-        str(datetime.datetime.now()).replace(":", "_").replace(" ", "_")
-    )
+    time_stamp = str(datetime.now()).replace(":", "_").replace(" ", "_")
     model_save_path = os.path.join(
         SAVED_MODELS, f"slides_{weights_name}_mask_rcnn_{time_stamp}.h5"
     )
@@ -306,9 +312,7 @@ def detect_and_color_splash(model, image_path=None, video_path=None):
         # Color splash
         splash = color_splash(image, r["masks"])
         # Save output
-        file_name = "splash_{:%Y%m%dT%H%M%S}.png".format(
-            datetime.datetime.now()
-        )
+        file_name = "splash_{:%Y%m%dT%H%M%S}.png".format(datetime.now())
         imsave(file_name, splash)
     elif video_path:
         # Video capture
@@ -318,9 +322,7 @@ def detect_and_color_splash(model, image_path=None, video_path=None):
         fps = vcapture.get(cv2.CAP_PROP_FPS)
 
         # Define codec and create video writer
-        file_name = "splash_{:%Y%m%dT%H%M%S}.avi".format(
-            datetime.datetime.now()
-        )
+        file_name = "splash_{:%Y%m%dT%H%M%S}.avi".format(datetime.now())
         vwriter = cv2.VideoWriter(
             file_name, cv2.VideoWriter_fourcc(*"MJPG"), fps, (width, height)
         )
@@ -368,6 +370,26 @@ def visualize_detection(model, image_path=""):
     )
 
 
+def detect_mask_rcnn(model_path: str, model_logs_dir: str = SAVED_MODELS):
+    config = InferenceConfig()
+    model = modellib.MaskRCNN(
+        mode="inference", config=config, model_dir=model_logs_dir
+    )
+    model.load_weights(
+        model_path,
+        by_name=True,
+        exclude=[
+            "mrcnn_class_logits",
+            "mrcnn_bbox_fc",
+            "mrcnn_bbox",
+            "mrcnn_mask",
+        ],
+    )
+    if not os.path.exists(config.SAVED_MODELS_PATH):
+        os.makedirs(config.SAVED_MODELS_PATH)
+    crop_predictions(model, config.TEST_DATA_PATH, config.SAVED_MODELS_PATH)
+
+
 def crop_predictions(model, input_dir, output_dir):
     image_files = [
         name
@@ -390,6 +412,44 @@ def crop_predictions(model, input_dir, output_dir):
 
         image_save_path = os.path.join(output_dir, image_file)
         cv2.imwrite(image_save_path, cv2.cvtColor(crop_img, cv2.COLOR_RGB2BGR))
+
+
+def test(model_path: str):
+    config = InferenceConfig()
+    model = modellib.MaskRCNN(
+        mode="inference", config=config, model_dir=DEFAULT_LOGS_DIR
+    )
+    model.load_weights(
+        model_path,
+        by_name=True,
+        exclude=[
+            "mrcnn_class_logits",
+            "mrcnn_bbox_fc",
+            "mrcnn_bbox",
+            "mrcnn_mask",
+        ],
+    )
+    dataset = SlideDataset()
+
+    dataset.load_slides(os.path.dirname(config.TEST_DATA_PATH), "test")
+    dataset.prepare()
+    mAP_50, mAP_95, mAR = evaluate_model(dataset, model, config)
+
+    table = Table(title="MASK RCNN Results")
+    table.add_column("Path", style="cyan", no_wrap=True)
+    table.add_column("Class Precision")
+    table.add_column("Class Recall")
+    table.add_column("mAP@50")
+    table.add_column("mAP@95")
+    table.add_row(
+        model_path,
+        f"{(mAP_50+mAP_95)/2.0:.3f}",
+        f"{mAR:.3f}",
+        f"{mAP_50:.3f}",
+        f"{mAP_95:.3f}",
+    )
+    console = Console()
+    console.print(table)
 
 
 def get_weights_path(weights_name: str, model):

@@ -22,7 +22,7 @@ rich
 
 albumentations==0.5.1 --no-binary=imgaug,albumentations
 ray>=1.0.1
-einops==0.3.0
+einops==0.6.1
 kornia==0.4.1
 loguru==0.5.3
 yacs>=0.1.8

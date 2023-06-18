@@ -1,17 +1,12 @@
 import os
-import sys
 import cv2
 import torch
 import json
 from tqdm import tqdm
 import numpy as np
-from pathlib import Path
 from datetime import datetime
-from LoFTR.src.loftr import LoFTR
-from LoFTR.src.loftr.utils.cvpr_ds_config import default_cfg
-
-path = str(Path(Path(__file__).parent.absolute()).parent.absolute())
-sys.path.insert(0, path)
+from .LoFTR.src.loftr import LoFTR
+from .LoFTR.src.loftr.utils.cvpr_ds_config import default_cfg
 
 
 def compute_matching_score(mkpts0):
@@ -122,30 +117,3 @@ def analyze_matches(matched_images, duplicates_dict):
         f.write("Accuracy: " + str(accuracy) + "\n")
         f.write("Unidentified: " + str(len(matched_images) - matched) + "\n")
     return accuracy
-
-
-if __name__ == "__main__":
-    # train_model()
-    # path = os.path.abspath(os.getcwd())
-    # print(path)
-    # detect("../runs/detect/train4/weights/best.pt", "test_dataset")
-    # Print out system filepath
-    # print("System filepath: ", os.path.abspath(os.getcwd()))
-    # duplicates = process_images("matching_datasets/slides")
-    # print("Duplicates: ", duplicates)
-    root_dir_project = os.path.dirname(
-        os.path.dirname(os.path.abspath(__file__))
-    )
-    slides_dir = os.path.join(
-        root_dir_project, "data_fetch", "prepared_data", "slides"
-    )
-    slides_duplicates_file = os.path.join(
-        slides_dir,
-        "duplicates.json",
-    )
-    crops_dir = os.path.join(root_dir_project, "image_crops", "non_crops")
-
-    with open(slides_duplicates_file) as f:
-        duplicates = json.load(f)
-    matched_images = match_slides(slides_dir, crops_dir, is_weight_outdoor=True)
-    analyze_matches(matched_images, duplicates)

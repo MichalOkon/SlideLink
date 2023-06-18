@@ -100,7 +100,6 @@ def detect(model_path):
     if not os.path.exists(IMAGE_CROPS_DIR):
         os.makedirs(IMAGE_CROPS_DIR)
     shutil.copytree(cropped_images_path, IMAGE_CROPS_DIR, dirs_exist_ok=True)
-    shutil.copytree(data_dir, IMAGE_NON_CROPS_DIR, dirs_exist_ok=True)
 
 
 def test(model_path):
@@ -109,7 +108,7 @@ def test(model_path):
     precision, recall, mAP50, mAP95 = metrics.mean_results()
     table = Table(title="YOLO Results")
     table.add_column("Path", style="cyan", no_wrap=True)
-    table.add_column("Class precision")
+    table.add_column("Class Precision")
     table.add_column("Class Recall")
     table.add_column("mAP@50")
     table.add_column("mAP@95")
@@ -122,19 +121,3 @@ def test(model_path):
     )
     console = Console()
     console.print(table)
-
-
-if __name__ == "__main__":
-    train_model()
-    # path = os.path.abspath(os.getcwd())
-    # print(path)
-    # detect(
-    #     "/home/kbaran/git/git-uni/SlideLink/yolo_model/saved_models/yolo_2023-06-15_23_02_47.597993.pt"
-    # )
-    # test("/home/kbaran/git/git-uni/SlideLink/yolo_model/saved_models/best.pt")
-# Print out system filepath
-# print("System filepath: ", os.path.abspath(os.getcwd()))
-# duplicates = process_images("matching_datasets/slides")
-# print("Duplicates: ", duplicates)
-# matched_images = match_slides()
-# analyze_matches(matched_images, duplicates)
